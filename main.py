@@ -25,13 +25,12 @@ MANAGER_LINK = "https://t.me/fuckoffaz"
 INSTAGRAM_LINK = "https://www.instagram.com/_liberty.style_/" 
 CARD_NUMBER = "4874 0700 7049 2978"
 
-# --- БАЗА ТОВАРОВ (КАТАЛОГ) ---
-# Здесь ты можешь менять названия, цены и ссылки на фото
+# --- БАЗА ТОВАРОВ ---
 PRODUCTS = {
     "skirt_pleated": {
         "name": "Спідниця плісирована", 
         "price": 550, 
-        "photo": "https://i.imgur.com/PZ7a2X3.jpg" # Замени на свои ссылки
+        "photo": "https://i.imgur.com/PZ7a2X3.jpg" # Замени на свои
     },
     "blouse_classic": {
         "name": "Блуза класична", 
@@ -62,7 +61,9 @@ texts = {
         "main_menu": "Головне меню 🛍️",
         "catalog": "👗 Каталог товарів",
         "payment_delivery": "💳 Оплата та Доставка",
-        "support": "🆘 Підтримка / Соцмережі",
+        "about": "🧵 Про якість / Бренд",
+        "support": "🆘 Підтримка",
+        "about_text": "🧵 <b>Liberty Style — це якість.</b>\n\nМи використовуємо сертифіковані тканини (80% бавовна, 20% еластан), які не кошлатяться та дихають.\n🇺🇦 Українське виробництво.\n✨ Ідеальна посадка для школярів.",
         "sizes_info": "📏 <b>Розмірна сітка:</b>\nXS: 122-128 см | S: 128-134 см\nM: 134-140 см | L: 140-146 см\nXL: 146-152 см",
         "pay_info": f"🚚 <b>Доставка:</b> Нова Пошта.\n💳 <b>Оплата:</b> Переказ на карту.\n\nРеквізити: <code>{CARD_NUMBER}</code>",
         "support_info": f"📞 <b>Контакти:</b>\nМенеджер: {MANAGER_LINK}\n\n👇 <b>Підписуйтесь на нас:</b>",
@@ -74,18 +75,20 @@ texts = {
         "send_photo_please": "Будь ласка, надішліть фото квитанції.",
         "new_order_admin": "🚨 <b>НОВЕ ЗАМОВЛЕННЯ!</b>",
         "item_select": "Оберіть товар:",
-        "size_select": "Оберіть розмір:",
-        "confirm_order_user": "✅ Ваше замовлення #{{id}} підтверджено! Ми готуємо його до відправки.",
+        "confirm_order_user": "✅ <b>Ваше замовлення #{{id}} прийнято!</b>\n📦 ТТН: <code>{{ttn}}</code>\n\nДякуємо, що обрали Liberty Style!",
         "reject_order_user": "❌ Ваше замовлення #{{id}} скасовано. Зв'яжіться з менеджером.",
         "admin_panel": "👑 <b>Адмін-панель</b>\nОберіть дію:",
-        "stats": "📊 Користувачів у базі: "
+        "stats": "📊 Користувачів у базі: ",
+        "ask_ttn": "🚚 Введіть номер ТТН (накладної) для цього клієнта:"
     },
     "ru": {
         "welcome": "Добро пожаловать в Liberty Style! Выберите язык:",
         "main_menu": "Главное меню 🛍️",
         "catalog": "👗 Каталог товаров",
         "payment_delivery": "💳 Оплата и Доставка",
-        "support": "🆘 Поддержка / Соцсети",
+        "about": "🧵 О качестве / Бренд",
+        "support": "🆘 Поддержка",
+        "about_text": "🧵 <b>Liberty Style — это качество.</b>\n\nМы используем сертифицированные ткани (80% хлопок, 20% эластан), которые не кашлатятся и дышат.\n🇺🇦 Украинское производство.\n✨ Идеальная посадка для школьников.",
         "sizes_info": "📏 <b>Размерная сетка:</b>\nXS: 122-128 см | S: 128-134 см\nM: 134-140 см | L: 140-146 см\nXL: 146-152 см",
         "pay_info": f"🚚 <b>Доставка:</b> Новая Почта.\n💳 <b>Оплата:</b> Перевод на карту.\n\nРеквизиты: <code>{CARD_NUMBER}</code>",
         "support_info": f"📞 <b>Контакты:</b>\nМенеджер: {MANAGER_LINK}\n\n👇 <b>Подписывайтесь на нас:</b>",
@@ -97,17 +100,17 @@ texts = {
         "send_photo_please": "Пожалуйста, отправьте фото квитанции.",
         "new_order_admin": "🚨 <b>НОВЫЙ ЗАКАЗ!</b>",
         "item_select": "Выберите товар:",
-        "size_select": "Выберите размер:",
-        "confirm_order_user": "✅ Ваш заказ #{{id}} подтвержден! Мы готовим его к отправке.",
+        "confirm_order_user": "✅ <b>Ваш заказ #{{id}} принят!</b>\n📦 ТТН: <code>{{ttn}}</code>\n\nСпасибо, что выбрали Liberty Style!",
         "reject_order_user": "❌ Ваш заказ #{{id}} отменен. Свяжитесь с менеджером.",
         "admin_panel": "👑 <b>Админ-панель</b>\nВыберите действие:",
-        "stats": "📊 Пользователей в базе: "
+        "stats": "📊 Пользователей в базе: ",
+        "ask_ttn": "🚚 Введите номер ТТН (накладной) для этого клиента:"
     }
 }
 
 user_langs = {}
 
-# --- ФУНКЦИИ БАЗЫ ДАННЫХ ---
+# --- БАЗА ДАННЫХ ---
 async def add_user(user_id):
     if not os.path.exists(USERS_FILE):
         async with aiofiles.open(USERS_FILE, "w") as f: await f.write("")
@@ -120,10 +123,10 @@ async def get_all_users():
     async with aiofiles.open(USERS_FILE, "r") as f: data = await f.read()
     return data.split()
 
-# --- FSM (Машина состояний) ---
+# --- FSM ---
 class OrderState(StatesGroup):
-    choosing_item = State() # Выбор товара (техническое состояние)
-    choosing_size = State() # Выбор размера
+    choosing_item = State()
+    choosing_size = State()
     waiting_name = State()
     waiting_phone = State()
     waiting_city = State()
@@ -131,6 +134,7 @@ class OrderState(StatesGroup):
 
 class AdminState(StatesGroup):
     waiting_broadcast_text = State()
+    waiting_ttn = State() # Новое состояние для ТТН
 
 # --- КЛАВИАТУРЫ ---
 def get_lang_kb():
@@ -139,16 +143,16 @@ def get_lang_kb():
 def get_main_kb(lang):
     t = texts[lang]
     kb = ReplyKeyboardBuilder()
-    kb.button(text=t["catalog"]) # Теперь это ведет к инлайн-меню
+    kb.button(text=t["catalog"])
+    kb.button(text=t["about"]) # Новая кнопка
     kb.button(text=t["payment_delivery"])
     kb.button(text=t["support"])
-    kb.adjust(2, 1)
+    kb.adjust(2, 2)
     return kb.as_markup(resize_keyboard=True)
 
 def get_catalog_kb(lang):
     kb = InlineKeyboardBuilder()
     for code, data in PRODUCTS.items():
-        # Создаем кнопку для каждого товара
         kb.button(text=f"{data['name']} - {data['price']} грн", callback_data=f"show_{code}")
     kb.adjust(1)
     return kb.as_markup()
@@ -156,7 +160,7 @@ def get_catalog_kb(lang):
 def get_buy_kb(item_code, lang):
     kb = InlineKeyboardBuilder()
     text_buy = "Купити" if lang == "ua" else "Купить"
-    text_back = "🔙 Назад"
+    text_back = "🔙"
     kb.button(text=f"🛒 {text_buy}", callback_data=f"buy_{item_code}")
     kb.button(text=text_back, callback_data="back_to_catalog")
     kb.adjust(1)
@@ -171,10 +175,11 @@ def get_sizes_kb(item_code):
     kb.adjust(3, 2, 1)
     return kb.as_markup()
 
-def get_admin_order_kb(user_id):
+def get_admin_order_kb(user_id, order_msg_id):
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Подтвердить", callback_data=f"adm_ok_{user_id}")
-    kb.button(text="❌ Отклонить", callback_data=f"adm_no_{user_id}")
+    # Передаем ID юзера и ID сообщения заказа в callback
+    kb.button(text="✅ Подтвердить + ТТН", callback_data=f"adm_ok_{user_id}_{order_msg_id}")
+    kb.button(text="❌ Отклонить", callback_data=f"adm_no_{user_id}_{order_msg_id}")
     return kb.as_markup()
 
 def get_admin_panel_kb():
@@ -183,7 +188,7 @@ def get_admin_panel_kb():
     kb.button(text="📊 Статистика", callback_data="admin_stats")
     return kb.as_markup()
 
-# --- ХЕНДЛЕРЫ: ОБЩИЕ ---
+# --- ХЕНДЛЕРЫ ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await add_user(message.from_user.id)
@@ -203,32 +208,26 @@ async def set_language(message: types.Message):
 
 def get_u_lang(user_id): return user_langs.get(user_id, "ua")
 
-# --- ЛОГИКА КАТАЛОГА ---
 @dp.message(lambda msg: any(txt in msg.text for txt in ["Каталог", "Catalog"]))
 async def show_catalog_menu(message: types.Message):
     lang = get_u_lang(message.from_user.id)
     await message.answer(texts[lang]["item_select"], reply_markup=get_catalog_kb(lang))
 
-# Показ товара
+@dp.message(lambda msg: any(txt in msg.text for txt in ["Про якість", "О качестве"]))
+async def show_about(message: types.Message):
+    lang = get_u_lang(message.from_user.id)
+    # Можно заменить на answer_photo, если есть фото производства
+    await message.answer(texts[lang]["about_text"], parse_mode="HTML")
+
 @dp.callback_query(F.data.startswith("show_"))
 async def show_item(callback: CallbackQuery):
     item_code = callback.data.split("_")[1]
     item = PRODUCTS[item_code]
     lang = get_u_lang(callback.from_user.id)
-    
     caption = f"<b>{item['name']}</b>\n\n💰 Цiна: {item['price']} грн\n\n{texts[lang]['sizes_info']}"
-    
-    # Пытаемся удалить старое сообщение или отправить новое с фото
-    try:
-        await callback.message.delete()
+    try: await callback.message.delete()
     except: pass
-    
-    await callback.message.answer_photo(
-        photo=item['photo'],
-        caption=caption,
-        reply_markup=get_buy_kb(item_code, lang),
-        parse_mode="HTML"
-    )
+    await callback.message.answer_photo(photo=item['photo'], caption=caption, reply_markup=get_buy_kb(item_code, lang), parse_mode="HTML")
 
 @dp.callback_query(F.data == "back_to_catalog")
 async def back_catalog(callback: CallbackQuery):
@@ -237,12 +236,10 @@ async def back_catalog(callback: CallbackQuery):
     except: pass
     await callback.message.answer(texts[lang]["item_select"], reply_markup=get_catalog_kb(lang))
 
-# --- ЛОГИКА ЗАКАЗА (Покупка) ---
+# --- ПОКУПКА ---
 @dp.callback_query(F.data.startswith("buy_"))
 async def start_buying(callback: CallbackQuery):
     item_code = callback.data.split("_")[1]
-    lang = get_u_lang(callback.from_user.id)
-    # Редактируем сообщение, предлагая размеры
     await callback.message.edit_reply_markup(reply_markup=get_sizes_kb(item_code))
     await callback.answer()
 
@@ -250,11 +247,8 @@ async def start_buying(callback: CallbackQuery):
 async def size_selected(callback: CallbackQuery, state: FSMContext):
     _, item_code, size = callback.data.split("_")
     lang = get_u_lang(callback.from_user.id)
-    
-    # Сохраняем выбор
     await state.update_data(item_code=item_code, size=size, price=PRODUCTS[item_code]['price'])
     await state.set_state(OrderState.waiting_name)
-    
     await callback.message.answer(texts[lang]["ask_name"])
     await callback.answer()
 
@@ -277,9 +271,7 @@ async def process_city(message: types.Message, state: FSMContext):
     await state.update_data(city=message.text)
     data = await state.get_data()
     lang = get_u_lang(message.from_user.id)
-    
     await state.set_state(OrderState.waiting_receipt)
-    # Форматируем текст с ценой
     text = texts[lang]["wait_payment"].replace("{{price}}", str(data['price']))
     await message.answer(text, parse_mode="HTML")
 
@@ -288,7 +280,6 @@ async def process_receipt(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = get_u_lang(message.from_user.id)
     user = message.from_user
-    
     item_name = PRODUCTS[data['item_code']]['name']
 
     admin_text = (
@@ -300,38 +291,62 @@ async def process_receipt(message: types.Message, state: FSMContext):
         f"📛 <b>ПІБ:</b> {data['name']}\n"
         f"📱 <b>Телефон:</b> {data['phone']}\n"
         f"🏙 <b>Доставка:</b> {data['city']}\n\n"
-        f"👇 <b>Підтвердіть або відхиліть замовлення:</b>"
+        f"👇 <b>Дії з замовленням:</b>"
     )
 
-    # Отправляем админу сообщение с кнопками действий
-    await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_kb(user.id), parse_mode="HTML")
+    # Важно: передаем ID сообщения клиента (хотя здесь мы просто генерим новое)
+    # Но для кнопок нам нужен ID пользователя
+    await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_kb(user.id, message.message_id), parse_mode="HTML")
     await message.copy_to(ADMIN_ID)
     
     await message.answer(texts[lang]["order_done"], reply_markup=get_main_kb(lang))
     await state.clear()
 
-# --- ОБРАБОТКА ДЕЙСТВИЙ АДМИНА ---
+# --- ОБРАБОТКА ДЕЙСТВИЙ АДМИНА (ТТН) ---
 @dp.callback_query(F.data.startswith("adm_"))
-async def admin_decision(callback: CallbackQuery):
-    action, user_id = callback.data.split("_")[1], callback.data.split("_")[2]
-    lang = get_u_lang(int(user_id))
-    
-    if action == "ok":
-        msg_user = texts[lang]["confirm_order_user"].replace("{{id}}", str(callback.message.message_id))
-        msg_admin = f"✅ Заказ клиента {user_id} ПОДТВЕРЖДЕН."
-    else:
-        msg_user = texts[lang]["reject_order_user"].replace("{{id}}", str(callback.message.message_id))
-        msg_admin = f"❌ Заказ клиента {user_id} ОТКЛОНЕН."
-    
-    # Отправляем уведомление пользователю
-    try:
-        await bot.send_message(int(user_id), msg_user)
-    except:
-        msg_admin += " (Клиент заблокировал бота)"
+async def admin_decision(callback: CallbackQuery, state: FSMContext):
+    parts = callback.data.split("_")
+    action = parts[1] # ok или no
+    user_id = parts[2]
+    # Сохраняем ID пользователя, которому будем слать ответ
+    await state.update_data(target_user_id=user_id, admin_msg_id=callback.message.message_id)
 
-    # Меняем сообщение у админа
-    await callback.message.edit_text(callback.message.text + f"\n\n👉 {msg_admin}")
-    await callback.answer()
+    if action == "ok":
+        # Если ОК - спрашиваем ТТН
+        lang = user_langs.get(ADMIN_ID, "ru")
+        await callback.message.answer(texts[lang]["ask_ttn"])
+        await state.set_state(AdminState.waiting_ttn)
+        await callback.answer()
+    else:
+        # Если ОТМЕНА - сразу шлем отказ
+        lang = get_u_lang(int(user_id))
+        try:
+            msg_user = texts[lang]["reject_order_user"].replace("{{id}}", "New")
+            await bot.send_message(int(user_id), msg_user)
+            await callback.message.edit_text(callback.message.text + "\n\n❌ ОТКЛОНЕНО")
+        except:
+            await callback.message.edit_text(callback.message.text + "\n\n❌ Ошибка (Юзер заблочил бота)")
+        await callback.answer()
+
+@dp.message(AdminState.waiting_ttn)
+async def process_ttn_input(message: types.Message, state: FSMContext):
+    if message.from_user.id != ADMIN_ID: return
+    
+    ttn = message.text
+    data = await state.get_data()
+    target_user_id = data['target_user_id']
+    
+    lang = get_u_lang(int(target_user_id))
+    
+    # Отправляем клиенту радостную новость
+    try:
+        msg_user = texts[lang]["confirm_order_user"].replace("{{id}}", "New").replace("{{ttn}}", ttn)
+        await bot.send_message(int(target_user_id), msg_user, parse_mode="HTML")
+        await message.answer(f"✅ ТТН {ttn} отправлен клиенту!")
+    except:
+        await message.answer("⚠️ Клиент заблокировал бота, ТТН не доставлен.")
+    
+    await state.clear()
 
 # --- АДМИН ПАНЕЛЬ ---
 @dp.callback_query(F.data == "admin_stats")
@@ -361,7 +376,7 @@ async def process_broadcast(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Успешно: {count}")
     await state.clear()
 
-# Остальные кнопки меню
+# Остальные кнопки
 @dp.message(lambda msg: any(txt in msg.text for txt in ["Оплата", "Payment"]))
 async def show_payment(message: types.Message):
     lang = get_u_lang(message.from_user.id)
