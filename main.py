@@ -2,7 +2,8 @@ import asyncio
 import logging
 import sys
 import os
-import aiosqlite # Библиотека для базы данных
+import html # Для защиты текста
+import aiosqlite 
 import aiofiles
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
@@ -81,15 +82,17 @@ texts = {
         "ask_phone": "📱 Напишіть номер телефону:",
         "ask_city": "🏙 Напишіть Місто та номер відділення Нової Пошти:",
         "wait_payment": f"✅ Замовлення сформовано!\nДо сплати: <b>%price% грн</b>\n\n💳 Карта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришліть сюди фото/скріншот квитанції:</b>",
-        "order_done": "✅ <b>Дякуємо! Ваше замовлення прийнято.</b>\nМенеджер перевірить оплату і підтвердить замовлення.",
+        "order_done": "✅ <b>Дякуємо! Ваше замовлення прийнято.</b>\nМенеджер перевірить оплату і підтвердить замовлення.\n\n(Повідомлення відправлено менеджеру)",
         "send_photo_please": "📷 Будь ласка, надішліть саме фото/скріншот квитанції.",
         
         "new_order_admin": "🚨 <b>НОВЕ ЗАМОВЛЕННЯ!</b>",
         "item_select": "Оберіть категорію/товар:",
         "confirm_order_user": "✅ <b>Ваше замовлення #%id% підтверджено!</b>\n📦 ТТН: <code>%ttn%</code>\n\nДякуємо, що ви з нами!",
         "reject_order_user": "❌ Ваше замовлення #%id% скасовано. Зв'яжіться з менеджером.",
-        "admin_panel": "👑 <b>Адмін-панель</b>\nКнопки управління замовленнями з'являються, коли клієнт надсилає чек.",
-        "ask_ttn": "🚚 Введіть номер ТТН для клієнта:"
+        "admin_panel": "👑 <b>Адмін-панель</b>\nКнопки управління замовленнями з'являються ТУТ, коли клієнт надсилає чек.",
+        "ask_ttn": "🚚 Введіть номер ТТН для клієнта:",
+        "session_expired": "⚠️ <b>Сесія застаріла.</b>\nБудь ласка, почніть замовлення спочатку через меню 'Каталог'.",
+        "error_admin_send": "⚠️ Замовлення прийнято, але не вдалося сповістити менеджера. Ми зв'яжемося з вами."
     },
     "ru": {
         "welcome": "Добро пожаловать в Liberty Style! Выберите язык:",
@@ -114,15 +117,17 @@ texts = {
         "ask_phone": "📱 Напишите номер телефона:",
         "ask_city": "🏙 Напишите Город и номер отделения Новой Почты:",
         "wait_payment": f"✅ Заказ сформирован!\nК оплате: <b>%price% грн</b>\n\n💳 Карта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришлите сюда фото/скриншот квитанции:</b>",
-        "order_done": "✅ <b>Спасибо! Ваш заказ принят.</b>\nМенеджер проверит оплату и подтвердит заказ.",
+        "order_done": "✅ <b>Спасибо! Ваш заказ принят.</b>\nМенеджер проверит оплату и подтвердит заказ.\n\n(Сообщение отправлено менеджеру)",
         "send_photo_please": "📷 Пожалуйста, отправьте именно фото/скриншот квитанции.",
         
         "new_order_admin": "🚨 <b>НОВЫЙ ЗАКАЗ!</b>",
         "item_select": "Выберите товар:",
         "confirm_order_user": "✅ <b>Ваш заказ #%id% подтвержден!</b>\n📦 ТТН: <code>%ttn%</code>\n\nСпасибо, что вы с нами!",
         "reject_order_user": "❌ Ваш заказ #%id% отменен. Свяжитесь с менеджером.",
-        "admin_panel": "👑 <b>Админ-панель</b>\nКнопки управления заказами появляются, когда клиент присылает чек.",
-        "ask_ttn": "🚚 Введите номер ТТН для клиента:"
+        "admin_panel": "👑 <b>Админ-панель</b>\nКнопки управления заказами появляются ЗДЕСЬ, когда клиент присылает чек.",
+        "ask_ttn": "🚚 Введите номер ТТН для клиента:",
+        "session_expired": "⚠️ <b>Сессия устарела.</b>\nПожалуйста, начните заказ сначала через меню 'Каталог'.",
+        "error_admin_send": "⚠️ Заказ принят, но не удалось оповестить менеджера. Мы свяжемся с вами."
     }
 }
 
@@ -228,7 +233,7 @@ def get_admin_panel_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📢 Рассылка", callback_data="admin_broadcast")
     kb.button(text="📊 Статистика", callback_data="admin_stats")
-    kb.button(text="📥 База Клієнтів", callback_data="admin_export") # НОВАЯ КНОПКА
+    kb.button(text="📥 База Клієнтів", callback_data="admin_export")
     kb.adjust(2, 1)
     return kb.as_markup()
 
@@ -301,7 +306,6 @@ async def show_item(callback: CallbackQuery):
     try: await callback.message.delete()
     except: pass
     
-    # Добавил защиту: если фото не грузится, пришлет текст, чтобы бот не завис
     try:
         await callback.message.answer_photo(photo=item['photo'], caption=caption, reply_markup=get_buy_kb(item_code, lang), parse_mode="HTML")
     except Exception as e:
@@ -351,34 +355,71 @@ async def process_city(message: types.Message, state: FSMContext):
     await state.update_data(city=message.text)
     data = await state.get_data()
     lang = get_u_lang(message.from_user.id)
+    
+    # Защита от потери данных
+    if 'price' not in data:
+        await message.answer(texts[lang]["session_expired"], reply_markup=get_main_kb(lang))
+        await state.clear()
+        return
+
     await state.set_state(OrderState.waiting_receipt)
     text = texts[lang]["wait_payment"].replace("%price%", str(data['price']))
     await message.answer(text, parse_mode="HTML")
 
+# --- ПРИЕМ ЧЕКА (ИСПРАВЛЕНО!) ---
 @dp.message(OrderState.waiting_receipt, F.photo | F.document)
 async def process_receipt(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = get_u_lang(message.from_user.id)
     user = message.from_user
-    try: item_name = PRODUCTS[data['item_code']]['name']
-    except: item_name = "Товар"
+    
+    # 1. Защита: Если бот перезагрузился и забыл товар
+    if not data or 'item_code' not in data:
+        await message.answer(texts[lang]["session_expired"], reply_markup=get_main_kb(lang))
+        await state.clear()
+        return
 
+    try: 
+        item_name = PRODUCTS[data['item_code']]['name']
+    except: 
+        item_name = "Товар (Невідомий)"
+
+    # 2. Формируем сообщение админу (с защитой от спецсимволов)
+    # Используем html.escape, чтобы имя "Ivan < hacker >" не сломало бота
+    safe_name = html.escape(data['name'])
+    safe_item = html.escape(item_name)
+    safe_city = html.escape(data['city'])
+    
     admin_text = (
         f"{texts[lang]['new_order_admin']}\n\n"
         f"👤 <b>Клієнт:</b> @{user.username} (ID: {user.id})\n"
-        f"👗 <b>Товар:</b> {item_name}\n"
+        f"👗 <b>Товар:</b> {safe_item}\n"
         f"📏 <b>Розмір:</b> {data['size']}\n"
         f"💰 <b>Сума:</b> {data['price']} грн\n"
-        f"📛 <b>ПІБ:</b> {data['name']}\n"
+        f"📛 <b>ПІБ:</b> {safe_name}\n"
         f"📱 <b>Телефон:</b> {data['phone']}\n"
-        f"🏙 <b>Доставка:</b> {data['city']}\n\n"
+        f"🏙 <b>Доставка:</b> {safe_city}\n\n"
         f"👇 <b>Дії:</b>"
     )
+
+    # 3. Пытаемся отправить админу
+    send_success = False
     try:
+        # Отправляем текст и кнопки
         await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_kb(user.id, message.message_id), parse_mode="HTML")
+        # Пересылаем фото чека
         await message.copy_to(ADMIN_ID)
-    except: pass
-    await message.answer(texts[lang]["order_done"], reply_markup=get_main_kb(lang))
+        send_success = True
+    except Exception as e:
+        print(f"CRITICAL ERROR sending to admin: {e}")
+
+    # 4. Отвечаем клиенту
+    if send_success:
+        await message.answer(texts[lang]["order_done"], reply_markup=get_main_kb(lang))
+    else:
+        # Если админу не ушло, говорим клиенту честно (но мягко)
+        await message.answer(texts[lang]["error_admin_send"], reply_markup=get_main_kb(lang))
+        
     await state.clear()
 
 @dp.message(OrderState.waiting_receipt)
@@ -454,12 +495,10 @@ async def show_stats(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "admin_export")
 async def export_users(callback: CallbackQuery):
-    # Выгрузка базы данных в файл
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute("SELECT user_id, username, full_name, join_date FROM users")
         rows = await cursor.fetchall()
     
-    # Формируем текст
     text_data = "ID | Username | Name | Date\n"
     for row in rows:
         text_data += f"{row[0]} | {row[1]} | {row[2]} | {row[3]}\n"
@@ -492,10 +531,16 @@ async def process_broadcast(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Успешно: {count}")
     await state.clear()
 
+# --- ЗАПУСК ---
 async def main():
     await init_db()
-    try: await bot.send_message(ADMIN_ID, "✅ <b>Бот работает!</b> Ошибки исправлены.", parse_mode="HTML")
-    except: pass
+    
+    # ПРОВЕРКА СВЯЗИ С АДМИНОМ
+    try: 
+        await bot.send_message(ADMIN_ID, "✅ <b>СЕРВЕР ЗАПУЩЕН!</b>\nЕсли вы видите это — вы Админ и все работает.", parse_mode="HTML")
+    except Exception as e:
+        print(f"❌ ОШИБКА: Бот не может написать Админу! Проверь ID или нажми /start в боте. {e}")
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
