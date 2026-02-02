@@ -22,24 +22,27 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8528185164:AAEqb_Yr8DYxWNzRlPPOHODf6WPY2qcnO5U" 
 ADMIN_ID = 843027482 
-GEMINI_KEY = "AIzaSyBDEXCPh7-Ryo6gjK5e-8SjA4Gl9Ga4BLQ" 
+GEMINI_KEY = "AIzaSyBDEXCPh7-Ryo6gjK5e-8SjA4Gl9Ga4BLQ"
 DB_NAME = "shop.db"
 
-# Настройка ИИ (Обернута в try, чтобы не роняла бота)
+# Настройка ИИ (Используем модель 1.5-flash, она работает стабильнее)
 try:
     genai.configure(api_key=GEMINI_KEY)
-    model = genai.GenerativeModel('gemini-pro')
+    model = genai.GenerativeModel('gemini-1.5-flash')
 except Exception as e:
     print(f"AI INIT ERROR: {e}")
 
 # --- МОЗГИ БОТА ---
 AI_PROMPT = """
-Ты — консультант магазина 'Liberty Style'.
-Товар: Школьная форма (Турция, 80% хлопок).
-Доставка: Новая Почта (1-2 дня).
+Ты — консультант магазина 'Liberty Style'. 
+Твоя задача - отвечать на вопросы клиентов про одежду.
+Товар: Школьная форма (Турция, 80% хлопок, 20% эластан).
+Доставка: Новая Почта (1-2 дня). Отправка в 18:00.
 Оплата: Монобанк.
-Цены: Юбка-550, Блуза-450, Брюки-600, Жакет-850 грн.
-Отвечай кратко, вежливо, на языке клиента.
+Цены: Спідниця-550, Блуза-450, Штани-600, Жакет-850 грн.
+Размеры: XS, S, M, L, XL.
+Если не знаешь ответ - пиши "Напишите менеджеру".
+Отвечай кратко и вежливо.
 """
 
 # Данные
@@ -64,20 +67,24 @@ texts = {
         "menu": "Головне меню:",
         "btn_cat": "🛍️ Каталог",
         "btn_sup": "🆘 Підтримка / ШІ",
+        "btn_man": "👨‍💻 Менеджер",
         "wait_payment": f"✅ Замовлення створено!\nДо сплати: <b>%price% грн</b>\nКарта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришліть чек сюди:</b>",
         "order_done": "✅ Замовлення прийнято! Менеджер скоро зв'яжеться.",
-        "ai_intro": "🤖 Привіт! Я ШІ-помічник. Запитайте мене про розміри чи тканину.",
-        "session_lost": "⚠️ <b>Увага:</b> Бот був перезавантажений, і ваш сеанс збився.\nБудь ласка, натисніть 'Каталог' і оберіть товар заново, щоб ми могли прийняти замовлення."
+        "ai_intro": "🤖 <b>ШІ-Помічник Liberty Style</b>\nЗапитайте мене про тканину, доставку або розміри.\n\n👇 Напишіть питання нижче:",
+        "session_lost": "⚠️ <b>Увага:</b> Бот був перезавантажений.\nНатисніть 'Каталог' і оберіть товар заново.",
+        "send_photo": "📷 Будь ласка, надішліть фото або скріншот чеку."
     },
     "ru": {
         "welcome": "Добро пожаловать в Liberty Style! Выберите язык:",
         "menu": "Главное меню:",
         "btn_cat": "🛍️ Каталог",
         "btn_sup": "🆘 Поддержка / ИИ",
+        "btn_man": "👨‍💻 Менеджер",
         "wait_payment": f"✅ Заказ создан!\nК оплате: <b>%price% грн</b>\nКарта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришлите чек сюда:</b>",
         "order_done": "✅ Заказ принят! Менеджер скоро свяжется.",
-        "ai_intro": "🤖 Привет! Я ИИ-помощник. Спросите меня про размеры или ткань.",
-        "session_lost": "⚠️ <b>Внимание:</b> Бот был перезагружен, и ваш сеанс сбился.\nПожалуйста, нажмите 'Каталог' и выберите товар заново, чтобы мы могли принять заказ."
+        "ai_intro": "🤖 <b>ИИ-Помощник Liberty Style</b>\nСпросите меня про ткань, доставку или размеры.\n\n👇 Напишите вопрос ниже:",
+        "session_lost": "⚠️ <b>Внимание:</b> Бот был перезагружен.\nНажмите 'Каталог' и выберите товар заново.",
+        "send_photo": "📷 Пожалуйста, отправьте фото или скриншот чека."
     }
 }
 
@@ -96,7 +103,7 @@ async def add_user(user):
 
 # --- FSM ---
 class OrderState(StatesGroup):
-    waiting_data = State() # Имя, телефон, город (все в одном для упрощения или по шагам)
+    waiting_data = State()
     waiting_receipt = State()
 
 class SupportState(StatesGroup):
@@ -111,7 +118,8 @@ def get_menu_kb(lang):
     kb = ReplyKeyboardBuilder()
     kb.button(text=t["btn_cat"])
     kb.button(text=t["btn_sup"])
-    kb.adjust(2)
+    kb.button(text=t["btn_man"]) # Добавил кнопку менеджера
+    kb.adjust(2, 1)
     return kb.as_markup(resize_keyboard=True)
 
 def get_catalog_kb():
@@ -132,6 +140,11 @@ def get_admin_kb(user_id):
     kb.button(text="❌ NO", callback_data=f"no_{user_id}")
     return kb.as_markup()
 
+def get_back_kb():
+    kb = ReplyKeyboardBuilder()
+    kb.button(text="🔙 Menu")
+    return kb.as_markup(resize_keyboard=True)
+
 # --- HANDLERS ---
 @dp.message(Command("start"))
 async def start(message: types.Message, state: FSMContext):
@@ -147,10 +160,15 @@ async def set_lang(message: types.Message):
 
 def get_ul(uid): return user_langs.get(uid, "ua")
 
+# МЕНЕДЖЕР
+@dp.message(F.text.contains("Менеджер"))
+async def call_manager(message: types.Message):
+    await message.answer(f"👨‍💻 Контакт: {MANAGER_LINK}")
+
 # CATALOG
-@dp.message(F.text.contains("Каталог"))
+@dp.message(F.text.contains("Каталог") | F.text.contains("Catalog"))
 async def show_catalog(message: types.Message):
-    await message.answer("👇", reply_markup=get_catalog_kb())
+    await message.answer("👗 Оберіть товар:", reply_markup=get_catalog_kb())
 
 @dp.callback_query(F.data.startswith("show_"))
 async def show_item(callback: CallbackQuery):
@@ -162,7 +180,7 @@ async def show_item(callback: CallbackQuery):
             caption=f"{item['name']}\n💰 {item['price']} грн", 
             reply_markup=get_buy_kb(code)
         )
-        await callback.answer() # ВАЖНО: Останавливает часики
+        await callback.answer()
     except:
         await callback.message.answer("Фото не грузится, но товар есть!", reply_markup=get_buy_kb(code))
         await callback.answer()
@@ -185,7 +203,7 @@ async def process_data(message: types.Message, state: FSMContext):
     msg = texts[lang]["wait_payment"].replace("%price%", str(data['price']))
     await message.answer(msg, parse_mode="HTML")
 
-# RECEIPT (ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ)
+# RECEIPT
 @dp.message(OrderState.waiting_receipt, F.photo)
 async def get_receipt(message: types.Message, state: FSMContext):
     data = await state.get_data()
@@ -202,31 +220,59 @@ async def get_receipt(message: types.Message, state: FSMContext):
     await message.answer(texts[lang]["order_done"], reply_markup=get_menu_kb(lang))
     await state.clear()
 
+@dp.message(OrderState.waiting_receipt)
+async def receipt_error(message: types.Message, state: FSMContext):
+    lang = get_ul(message.from_user.id)
+    await message.answer(texts[lang]["send_photo"])
+
+# АДМИНКА
+@dp.callback_query(F.data.startswith("ok_"))
+async def approve_order(callback: CallbackQuery):
+    user_id = callback.data.split("_")[1]
+    await callback.message.answer(f"🚚 Введіть ТТН для користувача {user_id}:")
+    # Тут можно добавить состояние для ТТН, но для простоты просто покажем сообщение админу
+
+@dp.callback_query(F.data.startswith("no_"))
+async def reject_order(callback: CallbackQuery):
+    user_id = callback.data.split("_")[1]
+    try:
+        await bot.send_message(user_id, "❌ Ваше замовлення скасовано.")
+        await callback.message.edit_text("❌ Замовлення відхилено.")
+    except:
+        await callback.message.edit_text("❌ Відхилено (Користувач заблокував бота).")
+
 # ЛОВУШКА ДЛЯ ФОТО (Если бот забыл состояние)
 @dp.message(F.photo)
 async def unexpected_receipt(message: types.Message):
     lang = get_ul(message.from_user.id)
     await message.answer(texts[lang]["session_lost"], reply_markup=get_menu_kb(lang), parse_mode="HTML")
 
-# SUPPORT / AI
+# SUPPORT / AI (ИСПРАВЛЕНО ЗАВИСАНИЕ)
 @dp.message(F.text.contains("Підтримка") | F.text.contains("Поддержка"))
 async def support(message: types.Message, state: FSMContext):
     lang = get_ul(message.from_user.id)
     await state.set_state(SupportState.chat)
-    await message.answer(texts[lang]["ai_intro"], parse_mode="HTML")
+    await message.answer(texts[lang]["ai_intro"], reply_markup=get_back_kb(), parse_mode="HTML")
 
 @dp.message(SupportState.chat)
 async def ai_chat(message: types.Message, state: FSMContext):
-    if "каталог" in message.text.lower() or "menu" in message.text.lower():
+    lang = get_ul(message.from_user.id)
+    
+    # Выход из чата
+    if "menu" in message.text.lower() or "меню" in message.text.lower() or "back" in message.text.lower():
         await state.clear()
-        return await show_catalog(message)
+        await message.answer("Menu", reply_markup=get_menu_kb(lang))
+        return
         
     wait = await message.answer("⏳ ...")
     try:
+        # Используем to_thread чтобы не блокировать бота
         response = await asyncio.to_thread(model.generate_content, AI_PROMPT + f"\nВопрос: {message.text}")
         await bot.edit_message_text(response.text, message.chat.id, wait.message_id)
-    except:
-        await bot.edit_message_text("Менеджер скоро відповість.", message.chat.id, wait.message_id)
+    except Exception as e:
+        # Если ИИ сломался, бот не зависнет, а напишет это:
+        print(f"AI Error: {e}")
+        await bot.edit_message_text("😵‍💫 ШІ зараз перевантажений. Напишіть менеджеру @fuckoffaz", message.chat.id, wait.message_id)
 
 async def main():
     await init_db()
