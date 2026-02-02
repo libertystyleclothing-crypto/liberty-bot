@@ -17,7 +17,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8528185164:AAEqb_Yr8DYxWNzRlPPOHODf6WPY2qcnO5U" 
-ADMIN_ID = 843027482  # <--- ВСТАВЬ СВОЙ ID (ЧИСЛОМ)
+ADMIN_ID = 843027482  # <--- ВСТАВЬ СВОЙ ID
 USERS_FILE = "users.txt" 
 
 # Ссылки и данные
@@ -26,11 +26,12 @@ INSTAGRAM_LINK = "https://www.instagram.com/_liberty.style_/"
 CARD_NUMBER = "4874 0700 7049 2978"
 
 # --- БАЗА ТОВАРОВ ---
+# Важно: названия ключей (skirt_pleated) используем в кнопках
 PRODUCTS = {
     "skirt_pleated": {
         "name": "Спідниця плісирована", 
         "price": 550, 
-        "photo": "https://i.imgur.com/PZ7a2X3.jpg" # Замени на свои
+        "photo": "https://i.imgur.com/PZ7a2X3.jpg"
     },
     "blouse_classic": {
         "name": "Блуза класична", 
@@ -125,8 +126,6 @@ async def get_all_users():
 
 # --- FSM ---
 class OrderState(StatesGroup):
-    choosing_item = State()
-    choosing_size = State()
     waiting_name = State()
     waiting_phone = State()
     waiting_city = State()
@@ -134,7 +133,7 @@ class OrderState(StatesGroup):
 
 class AdminState(StatesGroup):
     waiting_broadcast_text = State()
-    waiting_ttn = State() # Новое состояние для ТТН
+    waiting_ttn = State()
 
 # --- КЛАВИАТУРЫ ---
 def get_lang_kb():
@@ -144,7 +143,7 @@ def get_main_kb(lang):
     t = texts[lang]
     kb = ReplyKeyboardBuilder()
     kb.button(text=t["catalog"])
-    kb.button(text=t["about"]) # Новая кнопка
+    kb.button(text=t["about"])
     kb.button(text=t["payment_delivery"])
     kb.button(text=t["support"])
     kb.adjust(2, 2)
@@ -153,6 +152,7 @@ def get_main_kb(lang):
 def get_catalog_kb(lang):
     kb = InlineKeyboardBuilder()
     for code, data in PRODUCTS.items():
+        # Важно: callback_data должен содержать код товара
         kb.button(text=f"{data['name']} - {data['price']} грн", callback_data=f"show_{code}")
     kb.adjust(1)
     return kb.as_markup()
@@ -160,9 +160,8 @@ def get_catalog_kb(lang):
 def get_buy_kb(item_code, lang):
     kb = InlineKeyboardBuilder()
     text_buy = "Купити" if lang == "ua" else "Купить"
-    text_back = "🔙"
     kb.button(text=f"🛒 {text_buy}", callback_data=f"buy_{item_code}")
-    kb.button(text=text_back, callback_data="back_to_catalog")
+    kb.button(text="🔙", callback_data="back_to_catalog")
     kb.adjust(1)
     return kb.as_markup()
 
@@ -170,6 +169,7 @@ def get_sizes_kb(item_code):
     kb = InlineKeyboardBuilder()
     sizes = ["XS", "S", "M", "L", "XL"]
     for s in sizes:
+        # Формат: size_КОД_РАЗМЕР
         kb.button(text=s, callback_data=f"size_{item_code}_{s}")
     kb.button(text="🔙", callback_data=f"show_{item_code}")
     kb.adjust(3, 2, 1)
@@ -177,7 +177,6 @@ def get_sizes_kb(item_code):
 
 def get_admin_order_kb(user_id, order_msg_id):
     kb = InlineKeyboardBuilder()
-    # Передаем ID юзера и ID сообщения заказа в callback
     kb.button(text="✅ Подтвердить + ТТН", callback_data=f"adm_ok_{user_id}_{order_msg_id}")
     kb.button(text="❌ Отклонить", callback_data=f"adm_no_{user_id}_{order_msg_id}")
     return kb.as_markup()
@@ -216,18 +215,32 @@ async def show_catalog_menu(message: types.Message):
 @dp.message(lambda msg: any(txt in msg.text for txt in ["Про якість", "О качестве"]))
 async def show_about(message: types.Message):
     lang = get_u_lang(message.from_user.id)
-    # Можно заменить на answer_photo, если есть фото производства
     await message.answer(texts[lang]["about_text"], parse_mode="HTML")
 
+# --- ИСПРАВЛЕННЫЙ БЛОК (Логика выбора товара) ---
 @dp.callback_query(F.data.startswith("show_"))
 async def show_item(callback: CallbackQuery):
-    item_code = callback.data.split("_")[1]
+    # ИСПРАВЛЕНИЕ: Используем replace вместо split, чтобы не ломалось на "_"
+    item_code = callback.data.replace("show_", "")
+    
+    # Проверка на всякий случай
+    if item_code not in PRODUCTS:
+        await callback.answer("Товар не найден / Товар не знайдено", show_alert=True)
+        return
+
     item = PRODUCTS[item_code]
     lang = get_u_lang(callback.from_user.id)
     caption = f"<b>{item['name']}</b>\n\n💰 Цiна: {item['price']} грн\n\n{texts[lang]['sizes_info']}"
+    
     try: await callback.message.delete()
     except: pass
-    await callback.message.answer_photo(photo=item['photo'], caption=caption, reply_markup=get_buy_kb(item_code, lang), parse_mode="HTML")
+    
+    await callback.message.answer_photo(
+        photo=item['photo'], 
+        caption=caption, 
+        reply_markup=get_buy_kb(item_code, lang), 
+        parse_mode="HTML"
+    )
 
 @dp.callback_query(F.data == "back_to_catalog")
 async def back_catalog(callback: CallbackQuery):
@@ -239,19 +252,27 @@ async def back_catalog(callback: CallbackQuery):
 # --- ПОКУПКА ---
 @dp.callback_query(F.data.startswith("buy_"))
 async def start_buying(callback: CallbackQuery):
-    item_code = callback.data.split("_")[1]
+    # ИСПРАВЛЕНИЕ: Используем replace
+    item_code = callback.data.replace("buy_", "")
     await callback.message.edit_reply_markup(reply_markup=get_sizes_kb(item_code))
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("size_"))
 async def size_selected(callback: CallbackQuery, state: FSMContext):
-    _, item_code, size = callback.data.split("_")
+    # ИСПРАВЛЕНИЕ: Разбиваем текст, учитывая что код может быть сложным
+    # size_jacket_form_M -> split("_") -> ['size', 'jacket', 'form', 'M']
+    parts = callback.data.split("_")
+    size = parts[-1] # Последний элемент - это всегда размер (XS, S...)
+    # Код товара - это всё что между 'size' и 'Размером'
+    item_code = "_".join(parts[1:-1]) 
+
     lang = get_u_lang(callback.from_user.id)
     await state.update_data(item_code=item_code, size=size, price=PRODUCTS[item_code]['price'])
     await state.set_state(OrderState.waiting_name)
     await callback.message.answer(texts[lang]["ask_name"])
     await callback.answer()
 
+# --- ОФОРМЛЕНИЕ ЗАКАЗА ---
 @dp.message(OrderState.waiting_name)
 async def process_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
@@ -294,31 +315,26 @@ async def process_receipt(message: types.Message, state: FSMContext):
         f"👇 <b>Дії з замовленням:</b>"
     )
 
-    # Важно: передаем ID сообщения клиента (хотя здесь мы просто генерим новое)
-    # Но для кнопок нам нужен ID пользователя
     await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_kb(user.id, message.message_id), parse_mode="HTML")
     await message.copy_to(ADMIN_ID)
     
     await message.answer(texts[lang]["order_done"], reply_markup=get_main_kb(lang))
     await state.clear()
 
-# --- ОБРАБОТКА ДЕЙСТВИЙ АДМИНА (ТТН) ---
+# --- ОБРАБОТКА ДЕЙСТВИЙ АДМИНА ---
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_")
-    action = parts[1] # ok или no
+    action = parts[1]
     user_id = parts[2]
-    # Сохраняем ID пользователя, которому будем слать ответ
     await state.update_data(target_user_id=user_id, admin_msg_id=callback.message.message_id)
 
     if action == "ok":
-        # Если ОК - спрашиваем ТТН
         lang = user_langs.get(ADMIN_ID, "ru")
         await callback.message.answer(texts[lang]["ask_ttn"])
         await state.set_state(AdminState.waiting_ttn)
         await callback.answer()
     else:
-        # Если ОТМЕНА - сразу шлем отказ
         lang = get_u_lang(int(user_id))
         try:
             msg_user = texts[lang]["reject_order_user"].replace("{{id}}", "New")
@@ -331,21 +347,17 @@ async def admin_decision(callback: CallbackQuery, state: FSMContext):
 @dp.message(AdminState.waiting_ttn)
 async def process_ttn_input(message: types.Message, state: FSMContext):
     if message.from_user.id != ADMIN_ID: return
-    
     ttn = message.text
     data = await state.get_data()
     target_user_id = data['target_user_id']
-    
     lang = get_u_lang(int(target_user_id))
     
-    # Отправляем клиенту радостную новость
     try:
         msg_user = texts[lang]["confirm_order_user"].replace("{{id}}", "New").replace("{{ttn}}", ttn)
         await bot.send_message(int(target_user_id), msg_user, parse_mode="HTML")
-        await message.answer(f"✅ ТТН {ttn} отправлен клиенту!")
+        await message.answer(f"✅ ТТН {ttn} отправлен!")
     except:
-        await message.answer("⚠️ Клиент заблокировал бота, ТТН не доставлен.")
-    
+        await message.answer("⚠️ Клиент заблокировал бота.")
     await state.clear()
 
 # --- АДМИН ПАНЕЛЬ ---
@@ -357,7 +369,7 @@ async def show_stats(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "admin_broadcast")
 async def start_broadcast_btn(callback: CallbackQuery, state: FSMContext):
-    await callback.message.answer("📝 Введите текст/фото для рассылки:")
+    await callback.message.answer("📝 Введите текст для рассылки:")
     await state.set_state(AdminState.waiting_broadcast_text)
     await callback.answer()
 
