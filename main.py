@@ -3,6 +3,7 @@ import logging
 import sys
 import os
 import aiosqlite # Библиотека для базы данных
+import aiofiles
 from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -12,14 +13,14 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     ReplyKeyboardMarkup, KeyboardButton, 
     InlineKeyboardMarkup, InlineKeyboardButton,
-    CallbackQuery
+    CallbackQuery, FSInputFile
 )
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8528185164:AAEqb_Yr8DYxWNzRlPPOHODf6WPY2qcnO5U" 
-ADMIN_ID = 843027482  # ТВОЙ ID
-DB_NAME = "shop.db"   # Имя файла базы данных
+ADMIN_ID = 843027482  # Твой ID
+DB_NAME = "shop.db"
 
 # Ссылки и данные
 MANAGER_LINK = "https://t.me/fuckoffaz"
@@ -87,7 +88,7 @@ texts = {
         "item_select": "Оберіть категорію/товар:",
         "confirm_order_user": "✅ <b>Ваше замовлення #%id% підтверджено!</b>\n📦 ТТН: <code>%ttn%</code>\n\nДякуємо, що ви з нами!",
         "reject_order_user": "❌ Ваше замовлення #%id% скасовано. Зв'яжіться з менеджером.",
-        "admin_panel": "👑 <b>Адмін-панель</b>",
+        "admin_panel": "👑 <b>Адмін-панель</b>\nКнопки управління замовленнями з'являються, коли клієнт надсилає чек.",
         "ask_ttn": "🚚 Введіть номер ТТН для клієнта:"
     },
     "ru": {
@@ -120,7 +121,7 @@ texts = {
         "item_select": "Выберите товар:",
         "confirm_order_user": "✅ <b>Ваш заказ #%id% подтвержден!</b>\n📦 ТТН: <code>%ttn%</code>\n\nСпасибо, что вы с нами!",
         "reject_order_user": "❌ Ваш заказ #%id% отменен. Свяжитесь с менеджером.",
-        "admin_panel": "👑 <b>Админ-панель</b>",
+        "admin_panel": "👑 <b>Админ-панель</b>\nКнопки управления заказами появляются, когда клиент присылает чек.",
         "ask_ttn": "🚚 Введите номер ТТН для клиента:"
     }
 }
@@ -142,7 +143,6 @@ async def init_db():
 
 async def add_user_db(user: types.User):
     async with aiosqlite.connect(DB_NAME) as db:
-        # Проверяем, есть ли уже такой пользователь
         cursor = await db.execute("SELECT user_id FROM users WHERE user_id = ?", (user.id,))
         data = await cursor.fetchone()
         if not data:
@@ -157,7 +157,7 @@ async def get_all_users_db():
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute("SELECT user_id FROM users")
         rows = await cursor.fetchall()
-        return [row[0] for row in rows] # Возвращаем список ID
+        return [row[0] for row in rows]
 
 async def get_stats_text():
     async with aiosqlite.connect(DB_NAME) as db:
@@ -228,12 +228,14 @@ def get_admin_panel_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="📢 Рассылка", callback_data="admin_broadcast")
     kb.button(text="📊 Статистика", callback_data="admin_stats")
+    kb.button(text="📥 База Клієнтів", callback_data="admin_export") # НОВАЯ КНОПКА
+    kb.adjust(2, 1)
     return kb.as_markup()
 
 # --- ХЕНДЛЕРЫ ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await add_user_db(message.from_user) # Пишем в БД
+    await add_user_db(message.from_user)
     await message.answer("🇺🇦 Оберіть мову / 🇷🇺 Выберите язык", reply_markup=get_lang_kb())
 
 @dp.message(Command("admin"))
@@ -274,7 +276,6 @@ async def menu_delivery(message: types.Message):
 @dp.message(lambda msg: any(txt in msg.text for txt in ["Підтримка", "Поддержка", "Проблеми", "Проблемы"]))
 async def menu_support(message: types.Message):
     lang = get_u_lang(message.from_user.id)
-    # Предлагаем написать прямо в чат
     await message.answer(texts[lang]["support_header"], parse_mode="HTML")
 
 @dp.message(lambda msg: any(txt in msg.text for txt in ["Обмін", "Обмен"]))
@@ -299,7 +300,12 @@ async def show_item(callback: CallbackQuery):
     caption = f"<b>{item['name']}</b>\n\n💰 Цiна: {item['price']} грн"
     try: await callback.message.delete()
     except: pass
-    await callback.message.answer_photo(photo=item['photo'], caption=caption, reply_markup=get_buy_kb(item_code, lang), parse_mode="HTML")
+    
+    # Добавил защиту: если фото не грузится, пришлет текст, чтобы бот не завис
+    try:
+        await callback.message.answer_photo(photo=item['photo'], caption=caption, reply_markup=get_buy_kb(item_code, lang), parse_mode="HTML")
+    except Exception as e:
+        await callback.message.answer(caption + "\n(Фото не завантажилось)", reply_markup=get_buy_kb(item_code, lang), parse_mode="HTML")
 
 @dp.callback_query(F.data == "back_to_catalog")
 async def back_catalog(callback: CallbackQuery):
@@ -380,40 +386,27 @@ async def process_receipt_invalid(message: types.Message, state: FSMContext):
     lang = get_u_lang(message.from_user.id)
     await message.answer(texts[lang]["send_photo_please"])
 
-# --- ЧАТ ПОДДЕРЖКИ (ОТВЕТЫ) ---
+# --- ЧАТ ПОДДЕРЖКИ ---
 @dp.message(F.reply_to_message)
 async def admin_reply(message: types.Message):
-    # Если Админ отвечает на пересланное сообщение
     if message.from_user.id == ADMIN_ID:
-        # Пробуем достать ID пользователя из пересланного сообщения
         original_msg = message.reply_to_message
         if original_msg.forward_from:
             user_id = original_msg.forward_from.id
         else:
-            # Если пользователь скрыл профиль, айди не будет (это ограничение Телеграма)
             await message.answer("⚠️ Не могу ответить: пользователь скрыл свой профиль.")
             return
-
         try:
-            await message.copy_to(user_id) # Копируем ответ админа пользователю
+            await message.copy_to(user_id)
             await message.react([types.ReactionTypeEmoji(emoji="👍")])
         except:
-            await message.answer("⚠️ Не удалось отправить сообщение (юзер заблокировал бота).")
+            await message.answer("⚠️ Не удалось отправить сообщение.")
 
 @dp.message(F.text & ~F.text.startswith("/"))
 async def chat_with_admin(message: types.Message):
-    # Если это обычное сообщение (не команда и не кнопка меню)
-    if message.from_user.id == ADMIN_ID:
-        return # Админ сам себе не пишет
-
-    # Проверяем, что это не текст кнопки (чтобы не спамить)
-    # Простая проверка, можно улучшить
-    if len(message.text) < 50 and ("Доставка" in message.text or "Оплата" in message.text):
-        return
-
-    # Пересылаем сообщение Админу
-    try:
-        await message.forward(ADMIN_ID)
+    if message.from_user.id == ADMIN_ID: return
+    if len(message.text) < 50 and ("Доставка" in message.text or "Оплата" in message.text): return
+    try: await message.forward(ADMIN_ID)
     except: pass
 
 # --- АДМИНКА ---
@@ -459,6 +452,25 @@ async def show_stats(callback: CallbackQuery):
     await callback.message.answer(stats_text, parse_mode="HTML")
     await callback.answer()
 
+@dp.callback_query(F.data == "admin_export")
+async def export_users(callback: CallbackQuery):
+    # Выгрузка базы данных в файл
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute("SELECT user_id, username, full_name, join_date FROM users")
+        rows = await cursor.fetchall()
+    
+    # Формируем текст
+    text_data = "ID | Username | Name | Date\n"
+    for row in rows:
+        text_data += f"{row[0]} | {row[1]} | {row[2]} | {row[3]}\n"
+    
+    filename = "users_export.txt"
+    async with aiofiles.open(filename, "w", encoding="utf-8") as f:
+        await f.write(text_data)
+    
+    await callback.message.answer_document(FSInputFile(filename), caption="📂 База клиентов")
+    await callback.answer()
+
 @dp.callback_query(F.data == "admin_broadcast")
 async def start_broadcast_btn(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("📝 Введите текст для рассылки:")
@@ -481,9 +493,8 @@ async def process_broadcast(message: types.Message, state: FSMContext):
     await state.clear()
 
 async def main():
-    await init_db() # Создаем базу данных при запуске
-    try:
-        await bot.send_message(ADMIN_ID, "✅ <b>Бот обновлен!</b>\nБаза данных подключена.\nЧат работает (отвечай Replay-ем).", parse_mode="HTML")
+    await init_db()
+    try: await bot.send_message(ADMIN_ID, "✅ <b>Бот работает!</b> Ошибки исправлены.", parse_mode="HTML")
     except: pass
     await dp.start_polling(bot)
 
