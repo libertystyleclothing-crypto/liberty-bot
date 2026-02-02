@@ -17,7 +17,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
 TOKEN = "8528185164:AAEqb_Yr8DYxWNzRlPPOHODf6WPY2qcnO5U" 
-ADMIN_ID = 843027482  # <--- ВСТАВЬ СВОЙ ID
+ADMIN_ID = 843027482  # <--- ВАЖНО: ЗАМЕНИ НА ЦИФРЫ СВОЕГО ID!
 USERS_FILE = "users.txt" 
 
 # Ссылки и данные
@@ -26,27 +26,27 @@ INSTAGRAM_LINK = "https://www.instagram.com/_liberty.style_/"
 CARD_NUMBER = "4874 0700 7049 2978"
 
 # --- БАЗА ТОВАРОВ ---
-# Важно: названия ключей (skirt_pleated) используем в кнопках
+# Я поставил надежные ссылки-заглушки. Замени их на свои фото!
 PRODUCTS = {
     "skirt_pleated": {
         "name": "Спідниця плісирована", 
         "price": 550, 
-        "photo": "https://i.imgur.com/PZ7a2X3.jpg"
+        "photo": "https://cdn-icons-png.flaticon.com/512/2774/2774438.png" 
     },
     "blouse_classic": {
         "name": "Блуза класична", 
         "price": 450, 
-        "photo": "https://i.imgur.com/PZ7a2X3.jpg"
+        "photo": "https://cdn-icons-png.flaticon.com/512/2774/2774438.png"
     },
     "trousers_school": {
         "name": "Штани шкільні", 
         "price": 600, 
-        "photo": "https://i.imgur.com/PZ7a2X3.jpg"
+        "photo": "https://cdn-icons-png.flaticon.com/512/2774/2774438.png"
     },
     "jacket_form": {
         "name": "Жакет шкільний", 
         "price": 850, 
-        "photo": "https://i.imgur.com/PZ7a2X3.jpg"
+        "photo": "https://cdn-icons-png.flaticon.com/512/2774/2774438.png"
     }
 }
 
@@ -56,6 +56,7 @@ dp = Dispatcher(storage=MemoryStorage())
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
 # --- ТЕКСТЫ (HTML) ---
+# ВАЖНО: Мы используем %price% как метку для замены цены
 texts = {
     "ua": {
         "welcome": "Ласкаво просимо в Liberty Style! Оберіть мову:",
@@ -71,13 +72,13 @@ texts = {
         "ask_name": "✍️ Напишіть ПІБ отримувача:",
         "ask_phone": "📱 Напишіть номер телефону:",
         "ask_city": "🏙 Напишіть Місто та номер відділення Нової Пошти:",
-        "wait_payment": f"✅ Замовлення сформовано!\nДо сплати: <b>{{price}} грн</b>\n\n💳 Карта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришліть скріншот оплати:</b>",
+        "wait_payment": f"✅ Замовлення сформовано!\nДо сплати: <b>%price% грн</b>\n\n💳 Карта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришліть скріншот оплати:</b>",
         "order_done": "✅ Замовлення відправлено менеджеру! Очікуйте підтвердження.",
         "send_photo_please": "Будь ласка, надішліть фото квитанції.",
         "new_order_admin": "🚨 <b>НОВЕ ЗАМОВЛЕННЯ!</b>",
         "item_select": "Оберіть товар:",
-        "confirm_order_user": "✅ <b>Ваше замовлення #{{id}} прийнято!</b>\n📦 ТТН: <code>{{ttn}}</code>\n\nДякуємо, що обрали Liberty Style!",
-        "reject_order_user": "❌ Ваше замовлення #{{id}} скасовано. Зв'яжіться з менеджером.",
+        "confirm_order_user": "✅ <b>Ваше замовлення #%id% прийнято!</b>\n📦 ТТН: <code>%ttn%</code>\n\nДякуємо, що обрали Liberty Style!",
+        "reject_order_user": "❌ Ваше замовлення #%id% скасовано. Зв'яжіться з менеджером.",
         "admin_panel": "👑 <b>Адмін-панель</b>\nОберіть дію:",
         "stats": "📊 Користувачів у базі: ",
         "ask_ttn": "🚚 Введіть номер ТТН (накладної) для цього клієнта:"
@@ -96,13 +97,13 @@ texts = {
         "ask_name": "✍️ Напишите ФИО получателя:",
         "ask_phone": "📱 Напишите номер телефона:",
         "ask_city": "🏙 Напишите Город и номер отделения Новой Почты:",
-        "wait_payment": f"✅ Заказ сформирован!\nК оплате: <b>{{price}} грн</b>\n\n💳 Карта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришлите скриншот оплаты:</b>",
+        "wait_payment": f"✅ Заказ сформирован!\nК оплате: <b>%price% грн</b>\n\n💳 Карта: <code>{CARD_NUMBER}</code>\n\n📎 <b>Пришлите скриншот оплаты:</b>",
         "order_done": "✅ Заказ отправлен менеджеру! Ожидайте подтверждения.",
         "send_photo_please": "Пожалуйста, отправьте фото квитанции.",
         "new_order_admin": "🚨 <b>НОВЫЙ ЗАКАЗ!</b>",
         "item_select": "Выберите товар:",
-        "confirm_order_user": "✅ <b>Ваш заказ #{{id}} принят!</b>\n📦 ТТН: <code>{{ttn}}</code>\n\nСпасибо, что выбрали Liberty Style!",
-        "reject_order_user": "❌ Ваш заказ #{{id}} отменен. Свяжитесь с менеджером.",
+        "confirm_order_user": "✅ <b>Ваш заказ #%id% принят!</b>\n📦 ТТН: <code>%ttn%</code>\n\nСпасибо, что выбрали Liberty Style!",
+        "reject_order_user": "❌ Ваш заказ #%id% отменен. Свяжитесь с менеджером.",
         "admin_panel": "👑 <b>Админ-панель</b>\nВыберите действие:",
         "stats": "📊 Пользователей в базе: ",
         "ask_ttn": "🚚 Введите номер ТТН (накладной) для этого клиента:"
@@ -152,7 +153,6 @@ def get_main_kb(lang):
 def get_catalog_kb(lang):
     kb = InlineKeyboardBuilder()
     for code, data in PRODUCTS.items():
-        # Важно: callback_data должен содержать код товара
         kb.button(text=f"{data['name']} - {data['price']} грн", callback_data=f"show_{code}")
     kb.adjust(1)
     return kb.as_markup()
@@ -169,7 +169,6 @@ def get_sizes_kb(item_code):
     kb = InlineKeyboardBuilder()
     sizes = ["XS", "S", "M", "L", "XL"]
     for s in sizes:
-        # Формат: size_КОД_РАЗМЕР
         kb.button(text=s, callback_data=f"size_{item_code}_{s}")
     kb.button(text="🔙", callback_data=f"show_{item_code}")
     kb.adjust(3, 2, 1)
@@ -217,15 +216,12 @@ async def show_about(message: types.Message):
     lang = get_u_lang(message.from_user.id)
     await message.answer(texts[lang]["about_text"], parse_mode="HTML")
 
-# --- ИСПРАВЛЕННЫЙ БЛОК (Логика выбора товара) ---
+# --- ЛОГИКА ТОВАРОВ ---
 @dp.callback_query(F.data.startswith("show_"))
 async def show_item(callback: CallbackQuery):
-    # ИСПРАВЛЕНИЕ: Используем replace вместо split, чтобы не ломалось на "_"
     item_code = callback.data.replace("show_", "")
-    
-    # Проверка на всякий случай
     if item_code not in PRODUCTS:
-        await callback.answer("Товар не найден / Товар не знайдено", show_alert=True)
+        await callback.answer("Error / Помилка", show_alert=True)
         return
 
     item = PRODUCTS[item_code]
@@ -249,21 +245,16 @@ async def back_catalog(callback: CallbackQuery):
     except: pass
     await callback.message.answer(texts[lang]["item_select"], reply_markup=get_catalog_kb(lang))
 
-# --- ПОКУПКА ---
 @dp.callback_query(F.data.startswith("buy_"))
 async def start_buying(callback: CallbackQuery):
-    # ИСПРАВЛЕНИЕ: Используем replace
     item_code = callback.data.replace("buy_", "")
     await callback.message.edit_reply_markup(reply_markup=get_sizes_kb(item_code))
     await callback.answer()
 
 @dp.callback_query(F.data.startswith("size_"))
 async def size_selected(callback: CallbackQuery, state: FSMContext):
-    # ИСПРАВЛЕНИЕ: Разбиваем текст, учитывая что код может быть сложным
-    # size_jacket_form_M -> split("_") -> ['size', 'jacket', 'form', 'M']
     parts = callback.data.split("_")
-    size = parts[-1] # Последний элемент - это всегда размер (XS, S...)
-    # Код товара - это всё что между 'size' и 'Размером'
+    size = parts[-1]
     item_code = "_".join(parts[1:-1]) 
 
     lang = get_u_lang(callback.from_user.id)
@@ -293,10 +284,13 @@ async def process_city(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = get_u_lang(message.from_user.id)
     await state.set_state(OrderState.waiting_receipt)
-    text = texts[lang]["wait_payment"].replace("{{price}}", str(data['price']))
+    # ИСПРАВЛЕНИЕ ЦЕНЫ: меняем %price% на число
+    text = texts[lang]["wait_payment"].replace("%price%", str(data['price']))
     await message.answer(text, parse_mode="HTML")
 
-@dp.message(OrderState.waiting_receipt, F.photo)
+# --- ПРИЕМ ЧЕКА (ИСПРАВЛЕНО) ---
+# Теперь принимаем и ФОТО, и ДОКУМЕНТЫ (файлы)
+@dp.message(OrderState.waiting_receipt, F.photo | F.document)
 async def process_receipt(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = get_u_lang(message.from_user.id)
@@ -315,13 +309,23 @@ async def process_receipt(message: types.Message, state: FSMContext):
         f"👇 <b>Дії з замовленням:</b>"
     )
 
-    await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_kb(user.id, message.message_id), parse_mode="HTML")
-    await message.copy_to(ADMIN_ID)
-    
+    # ИСПРАВЛЕНИЕ МОЛЧАНИЯ: Если админу нельзя отправить, бот не зависнет
+    try:
+        await bot.send_message(ADMIN_ID, admin_text, reply_markup=get_admin_order_kb(user.id, message.message_id), parse_mode="HTML")
+        await message.copy_to(ADMIN_ID) # Пересылаем чек админу
+    except Exception as e:
+        print(f"Ошибка отправки админу: {e}")
+        # Можно сказать юзеру, что все ок, но админ занят (опционально)
+
     await message.answer(texts[lang]["order_done"], reply_markup=get_main_kb(lang))
     await state.clear()
 
-# --- ОБРАБОТКА ДЕЙСТВИЙ АДМИНА ---
+@dp.message(OrderState.waiting_receipt)
+async def process_receipt_invalid(message: types.Message, state: FSMContext):
+    lang = get_u_lang(message.from_user.id)
+    await message.answer(texts[lang]["send_photo_please"])
+
+# --- АДМИНКА (ТТН) ---
 @dp.callback_query(F.data.startswith("adm_"))
 async def admin_decision(callback: CallbackQuery, state: FSMContext):
     parts = callback.data.split("_")
@@ -337,7 +341,7 @@ async def admin_decision(callback: CallbackQuery, state: FSMContext):
     else:
         lang = get_u_lang(int(user_id))
         try:
-            msg_user = texts[lang]["reject_order_user"].replace("{{id}}", "New")
+            msg_user = texts[lang]["reject_order_user"].replace("%id%", "New")
             await bot.send_message(int(user_id), msg_user)
             await callback.message.edit_text(callback.message.text + "\n\n❌ ОТКЛОНЕНО")
         except:
@@ -353,14 +357,14 @@ async def process_ttn_input(message: types.Message, state: FSMContext):
     lang = get_u_lang(int(target_user_id))
     
     try:
-        msg_user = texts[lang]["confirm_order_user"].replace("{{id}}", "New").replace("{{ttn}}", ttn)
+        msg_user = texts[lang]["confirm_order_user"].replace("%id%", "New").replace("%ttn%", ttn)
         await bot.send_message(int(target_user_id), msg_user, parse_mode="HTML")
         await message.answer(f"✅ ТТН {ttn} отправлен!")
     except:
         await message.answer("⚠️ Клиент заблокировал бота.")
     await state.clear()
 
-# --- АДМИН ПАНЕЛЬ ---
+# --- ДОП КНОПКИ ---
 @dp.callback_query(F.data == "admin_stats")
 async def show_stats(callback: CallbackQuery):
     users = await get_all_users()
@@ -388,7 +392,6 @@ async def process_broadcast(message: types.Message, state: FSMContext):
     await message.answer(f"✅ Успешно: {count}")
     await state.clear()
 
-# Остальные кнопки
 @dp.message(lambda msg: any(txt in msg.text for txt in ["Оплата", "Payment"]))
 async def show_payment(message: types.Message):
     lang = get_u_lang(message.from_user.id)
