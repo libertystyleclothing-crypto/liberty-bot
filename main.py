@@ -17,50 +17,34 @@ from aiogram.types import (
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
 # --- КОНФИГУРАЦИЯ ---
-# Варіант 1: Читати з Railway Variables (РЕКОМЕНДОВАНО)
-# TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-# ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) if os.getenv("ADMIN_ID") else 0
-# GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
-# CARD_NUMBER = os.getenv("CARD_NUMBER", "1234 5678 1234 5678")
-# MANAGER_LINK = os.getenv("MANAGER_LINK", "https://t.me/polinakondratii")
+TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+ADMIN_ID = int(os.getenv("ADMIN_ID", "0")) if os.getenv("ADMIN_ID") else 0
+GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+CARD_NUMBER = os.getenv("CARD_NUMBER", "1234 5678 1234 5678")
+MANAGER_LINK = os.getenv("MANAGER_LINK", "https://t.me/polinakondratii")
 
-# Варіант 2: Якщо хочете прямо у коді (розкоментуйте рядки нижче)
+# Якщо хочете токени прямо у коді, розкоментуйте:
 TOKEN = "8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY"
 ADMIN_ID = 843027482
 GEMINI_KEY = "AIzaSyBNTVcRS468EACwmZ5gV4tINfDGbMWWUzU"
-CARD_NUMBER = "1234 5678 1234 5678"
-MANAGER_LINK = "https://t.me/polinakondratii"
 
 DB_NAME = "shop.db"
 
-# Перевірка наявності токена
 if not TOKEN:
-    print("❌ КРИТИЧНА ПОМИЛКА: Не вказаний TELEGRAM_TOKEN!")
-    print("\nДодайте у Railway Variables або розкоментуйте рядок у коді")
+    print("❌ TELEGRAM_TOKEN не вказаний!")
     sys.exit(1)
 
-if not ADMIN_ID:
-    print("⚠️ УВАГА: Не вказаний ADMIN_ID, адмін-функції не працюватимуть")
-
-# Настройка Google AI
+# Google AI
 AI_ENABLED = False
 try:
     from google import genai
-    from google.genai import types as genai_types
-    
     if GEMINI_KEY:
         client = genai.Client(api_key=GEMINI_KEY)
         AI_ENABLED = True
-        print("✅ Google AI підключено")
-    else:
-        print("⚠️ GEMINI_API_KEY не вказаний, AI вимкнено")
-except ImportError:
-    print("⚠️ Бібліотека google-genai не встановлена")
-    print("   Встановіть: pip install google-genai")
-except Exception as e:
-    print(f"⚠️ AI недоступний: {e}")
+        print("✅ AI підключено")
+except:
+    print("⚠️ AI недоступний")
 
-# --- ПРОМПТ ДЛЯ AI ---
 AI_PROMPT = """
 Ти — консультант магазина 'Liberty Style'.
 Товар: Школьная форма (Турция, 80% хлопок).
@@ -72,71 +56,80 @@ AI_PROMPT = """
 """
 
 PRODUCTS = {
-    "skirt_pleated": {
-        "name": "Спідниця плісирована", 
-        "price": 550, 
+    "skirt": {
+        "name_ua": "Спідниця плісирована",
+        "name_ru": "Юбка плиссированная",
+        "price": 550,
         "photo": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Girl_in_a_jacket_and_pleated_skirt.jpg/480px-Girl_in_a_jacket_and_pleated_skirt.jpg",
-        "desc": "Класична шкільна спідниця, 80% бавовна"
+        "desc_ua": "Класична шкільна спідниця, 80% бавовна",
+        "desc_ru": "Классическая школьная юбка, 80% хлопок"
     },
-    "blouse_classic": {
-        "name": "Блуза класична", 
-        "price": 450, 
+    "blouse": {
+        "name_ua": "Блуза класична",
+        "name_ru": "Блуза классическая",
+        "price": 450,
         "photo": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/White_blouse.jpg/480px-White_blouse.jpg",
-        "desc": "Біла шкільна блуза, дихаюча тканина"
+        "desc_ua": "Біла шкільна блуза, дихаюча тканина",
+        "desc_ru": "Белая школьная блуза, дышащая ткань"
     },
-    "trousers_school": {
-        "name": "Штани шкільні", 
-        "price": 600, 
+    "trousers": {
+        "name_ua": "Штани шкільні",
+        "name_ru": "Брюки школьные",
+        "price": 600,
         "photo": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8d/Trousers.jpg/480px-Trousers.jpg",
-        "desc": "Класичні шкільні штани"
+        "desc_ua": "Класичні шкільні штани",
+        "desc_ru": "Классические школьные брюки"
     },
-    "jacket_form": {
-        "name": "Жакет шкільний", 
-        "price": 850, 
+    "jacket": {
+        "name_ua": "Жакет шкільний",
+        "name_ru": "Жакет школьный",
+        "price": 850,
         "photo": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/Girl_in_a_jacket_and_pleated_skirt.jpg/480px-Girl_in_a_jacket_and_pleated_skirt.jpg",
-        "desc": "Елегантний жакет для урочистих подій"
+        "desc_ua": "Елегантний жакет",
+        "desc_ru": "Элегантный жакет"
     }
 }
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
-logging.basicConfig(
-    level=logging.INFO, 
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
-)
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
-# --- ТЕКСТЫ ---
 texts = {
     "ua": {
-        "welcome": "🎓 Вітаємо в Liberty Style!\n\nОберіть мову для продовження:",
+        "welcome": "🎓 Вітаємо в Liberty Style!\n\nОберіть мову:",
         "menu": "📋 Головне меню:",
         "btn_cat": "🛍️ Каталог",
         "btn_ai": "🤖 ШІ-асистент",
         "btn_manager": "👨‍💼 Менеджер",
-        "wait_payment": "✅ Замовлення створено!\n\n💰 До сплати: <b>{price} грн</b>\n💳 Карта Monobank:\n<code>{card}</code>\n\n📎 <b>Надішліть скріншот оплати:</b>",
-        "order_done": "✅ Замовлення прийнято!\n\n📞 Менеджер зв'яжеться протягом години.\nОчікуйте дзвінок або повідомлення.",
-        "ai_intro": "🤖 Привіт! Я ШІ-помічник Liberty Style.\n\n❓ Запитайте мене про:\n• Розміри та таблиці розмірів\n• Склад тканини\n• Умови доставки\n• Способи оплати\n\n💬 Або напишіть 'меню' для виходу",
-        "session_lost": "⚠️ <b>Сеанс втрачено</b>\n\nБот був перезавантажений.\nБудь ласка, почніть замовлення заново через Каталог.",
-        "catalog_title": "🛍️ Наш асортимент:\n\nОберіть товар для перегляду:",
-        "enter_data": "✍️ <b>Введіть дані для замовлення:</b>\n\n📝 ПІБ (повністю)\n📱 Номер телефону\n📍 Місто та відділення Нової Пошти\n\n<i>Приклад:\nІванова Марія Петрівна\n+380991234567\nКиїв, відділення №15</i>",
-        "manager_contact": "👨‍💼 <b>Зв'язок з менеджером:</b>\n\n{link}\n\nМенеджер онлайн та готовий відповісти на всі питання!",
-        "no_ai": "⚠️ ШІ-асистент тимчасово недоступний.\n\n👨‍💼 Зверніться до менеджера:\n{link}"
+        "catalog_title": "🛍️ Наш асортимент:\n\nОберіть товар:",
+        "enter_data": "✍️ <b>Введіть дані:</b>\n\n📝 ПІБ\n📱 Телефон\n📍 Місто, НП\n\n<i>Приклад:\nІванова Марія\n+380991234567\nКиїв, НП №15</i>",
+        "wait_payment": "✅ Замовлення #{order_id}\n\n💰 До сплати: <b>{price} грн</b>\n💳 <code>{card}</code>\n\n📎 Надішліть чек:",
+        "order_done": "✅ Прийнято! Менеджер зв'яжеться.",
+        "ai_intro": "🤖 ШІ-помічник\n\nЗапитайте про розміри, тканину, доставку.",
+        "manager_contact": "👨‍💼 Менеджер:\n{link}",
+        "no_ai": "⚠️ AI недоступний\n{link}",
+        "session_lost": "⚠️ Сеанс втрачено. Почніть заново.",
+        "admin_panel": "🔧 <b>АДМІН-ПАНЕЛЬ</b>\n\nВиберіть дію:",
+        "stats": "📊 <b>СТАТИСТИКА</b>\n\n👥 Користувачів: {users}\n📦 Замовлень: {orders}\n💰 Виконано: {completed}",
+        "no_orders": "Немає замовлень"
     },
     "ru": {
-        "welcome": "🎓 Добро пожаловать в Liberty Style!\n\nВыберите язык для продолжения:",
+        "welcome": "🎓 Добро пожаловать в Liberty Style!\n\nВыберите язык:",
         "menu": "📋 Главное меню:",
         "btn_cat": "🛍️ Каталог",
         "btn_ai": "🤖 ИИ-ассистент",
         "btn_manager": "👨‍💼 Менеджер",
-        "wait_payment": "✅ Заказ создан!\n\n💰 К оплате: <b>{price} грн</b>\n💳 Карта Monobank:\n<code>{card}</code>\n\n📎 <b>Пришлите скриншот оплаты:</b>",
-        "order_done": "✅ Заказ принят!\n\n📞 Менеджер свяжется в течение часа.\nОжидайте звонок или сообщение.",
-        "ai_intro": "🤖 Привет! Я ИИ-помощник Liberty Style.\n\n❓ Спросите меня о:\n• Размерах и таблицах размеров\n• Составе ткани\n• Условиях доставки\n• Способах оплаты\n\n💬 Или напишите 'меню' для выхода",
-        "session_lost": "⚠️ <b>Сеанс потерян</b>\n\nБот был перезагружен.\nПожалуйста, начните заказ заново через Каталог.",
-        "catalog_title": "🛍️ Наш ассортимент:\n\nВыберите товар для просмотра:",
-        "enter_data": "✍️ <b>Введите данные для заказа:</b>\n\n📝 ФИО (полностью)\n📱 Номер телефона\n📍 Город и отделение Новой Почты\n\n<i>Пример:\nИванова Мария Петровна\n+380991234567\nКиев, отделение №15</i>",
-        "manager_contact": "👨‍💼 <b>Связь с менеджером:</b>\n\n{link}\n\nМенеджер онлайн и готов ответить на все вопросы!",
-        "no_ai": "⚠️ ИИ-ассистент временно недоступен.\n\n👨‍💼 Обратитесь к менеджеру:\n{link}"
+        "catalog_title": "🛍️ Наш ассортимент:\n\nВыберите товар:",
+        "enter_data": "✍️ <b>Введите данные:</b>\n\n📝 ФИО\n📱 Телефон\n📍 Город, НП\n\n<i>Пример:\nИванова Мария\n+380991234567\nКиев, НП №15</i>",
+        "wait_payment": "✅ Заказ #{order_id}\n\n💰 К оплате: <b>{price} грн</b>\n💳 <code>{card}</code>\n\n📎 Пришлите чек:",
+        "order_done": "✅ Принят! Менеджер свяжется.",
+        "ai_intro": "🤖 ИИ-помощник\n\nСпросите о размерах, ткани, доставке.",
+        "manager_contact": "👨‍💼 Менеджер:\n{link}",
+        "no_ai": "⚠️ AI недоступен\n{link}",
+        "session_lost": "⚠️ Сеанс потерян. Начните заново.",
+        "admin_panel": "🔧 <b>АДМИН-ПАНЕЛЬ</b>\n\nВыберите действие:",
+        "stats": "📊 <b>СТАТИСТИКА</b>\n\n👥 Пользователей: {users}\n📦 Заказов: {orders}\n💰 Выполнено: {completed}",
+        "no_orders": "Нет заказов"
     }
 }
 
@@ -157,6 +150,7 @@ async def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
                 item_code TEXT,
+                item_name TEXT,
                 user_info TEXT,
                 price INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -167,20 +161,38 @@ async def init_db():
 
 async def add_user(user):
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO users (user_id, username) VALUES (?, ?)", 
-            (user.id, user.username)
-        )
+        await db.execute("INSERT OR IGNORE INTO users VALUES (?, ?, ?)", 
+                        (user.id, user.username, datetime.now()))
         await db.commit()
 
-async def save_order(user_id, item_code, user_info, price):
+async def save_order(user_id, item_code, item_name, user_info, price):
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
-            "INSERT INTO orders (user_id, item_code, user_info, price) VALUES (?, ?, ?, ?)",
-            (user_id, item_code, user_info, price)
+            "INSERT INTO orders (user_id, item_code, item_name, user_info, price) VALUES (?, ?, ?, ?, ?)",
+            (user_id, item_code, item_name, user_info, price)
         )
         await db.commit()
         return cursor.lastrowid
+
+async def get_stats():
+    async with aiosqlite.connect(DB_NAME) as db:
+        users = await db.execute("SELECT COUNT(*) FROM users")
+        users_count = (await users.fetchone())[0]
+        
+        orders = await db.execute("SELECT COUNT(*) FROM orders")
+        orders_count = (await orders.fetchone())[0]
+        
+        completed = await db.execute("SELECT COUNT(*) FROM orders WHERE status='completed'")
+        completed_count = (await completed.fetchone())[0]
+        
+        return users_count, orders_count, completed_count
+
+async def get_pending_orders():
+    async with aiosqlite.connect(DB_NAME) as db:
+        cursor = await db.execute(
+            "SELECT id, user_id, item_name, price, user_info, created_at FROM orders WHERE status='pending' ORDER BY created_at DESC LIMIT 10"
+        )
+        return await cursor.fetchall()
 
 # --- FSM ---
 class OrderState(StatesGroup):
@@ -210,23 +222,30 @@ def get_menu_kb(lang):
 def get_catalog_kb(lang):
     kb = InlineKeyboardBuilder()
     for code, data in PRODUCTS.items():
-        kb.button(
-            text=f"{data['name']} - {data['price']} грн", 
-            callback_data=f"show_{code}"
-        )
+        name_key = f"name_{lang}"
+        kb.button(text=f"{data[name_key]} - {data['price']} грн", callback_data=f"item_{code}")
     kb.adjust(1)
     return kb.as_markup()
 
-def get_buy_kb(item_code):
+def get_item_kb(code, lang):
     kb = InlineKeyboardBuilder()
-    kb.button(text="🛒 Купити / Купить", callback_data=f"buy_{item_code}")
+    kb.button(text="🛒 Купити / Купить", callback_data=f"buy_{code}")
+    kb.button(text="◀️ Назад / Назад", callback_data="back_catalog")
     kb.adjust(1)
     return kb.as_markup()
 
-def get_admin_kb(user_id, order_id):
+def get_admin_kb():
     kb = InlineKeyboardBuilder()
-    kb.button(text="✅ Підтвердити", callback_data=f"ok_{user_id}_{order_id}")
-    kb.button(text="❌ Відхилити", callback_data=f"no_{user_id}_{order_id}")
+    kb.button(text="📊 Статистика", callback_data="admin_stats")
+    kb.button(text="📦 Замовлення", callback_data="admin_orders")
+    kb.button(text="✅ Підтвердити всі", callback_data="admin_approve_all")
+    kb.adjust(2, 1)
+    return kb.as_markup()
+
+def get_order_kb(order_id, user_id):
+    kb = InlineKeyboardBuilder()
+    kb.button(text="✅ OK", callback_data=f"ok_{order_id}_{user_id}")
+    kb.button(text="❌ NO", callback_data=f"no_{order_id}_{user_id}")
     kb.adjust(2)
     return kb.as_markup()
 
@@ -238,76 +257,70 @@ def get_ul(uid):
 async def start(message: types.Message, state: FSMContext):
     await state.clear()
     await add_user(message.from_user)
-    
-    logging.info(f"User {message.from_user.id} (@{message.from_user.username}) started bot")
-    
-    await message.answer(
-        texts["ua"]["welcome"], 
-        reply_markup=get_lang_kb()
-    )
+    await message.answer(texts["ua"]["welcome"], reply_markup=get_lang_kb())
 
 @dp.message(F.text.in_({"🇺🇦 Українська", "🇷🇺 Русский"}))
 async def set_lang(message: types.Message):
     lang = "ua" if "🇺🇦" in message.text else "ru"
     user_langs[message.from_user.id] = lang
-    
-    logging.info(f"User {message.from_user.id} selected language: {lang}")
-    
-    await message.answer(
-        texts[lang]["menu"], 
-        reply_markup=get_menu_kb(lang)
-    )
+    await message.answer(texts[lang]["menu"], reply_markup=get_menu_kb(lang))
 
 # CATALOG
 @dp.message(F.text.contains("Каталог"))
 async def show_catalog(message: types.Message):
     lang = get_ul(message.from_user.id)
-    await message.answer(
-        texts[lang]["catalog_title"], 
-        reply_markup=get_catalog_kb(lang)
-    )
+    await message.answer(texts[lang]["catalog_title"], reply_markup=get_catalog_kb(lang))
 
-@dp.callback_query(F.data.startswith("show_"))
+@dp.callback_query(F.data.startswith("item_"))
 async def show_item(callback: CallbackQuery):
-    code = callback.data.split("_")[1]
-    item = PRODUCTS.get(code)
+    code = callback.data.replace("item_", "")
+    lang = get_ul(callback.from_user.id)
     
+    item = PRODUCTS.get(code)
     if not item:
-        await callback.answer("Товар не знайдено")
+        await callback.answer("❌ Помилка")
         return
     
-    caption = f"<b>{item['name']}</b>\n\n{item.get('desc', '')}\n\n💰 Ціна: <b>{item['price']} грн</b>"
+    name = item[f"name_{lang}"]
+    desc = item[f"desc_{lang}"]
+    caption = f"<b>{name}</b>\n\n{desc}\n\n💰 <b>{item['price']} грн</b>"
     
     try:
+        await callback.message.delete()
         await callback.message.answer_photo(
             item['photo'], 
             caption=caption,
-            reply_markup=get_buy_kb(code),
+            reply_markup=get_item_kb(code, lang),
             parse_mode="HTML"
         )
-    except Exception as e:
-        logging.error(f"Photo error for {code}: {e}")
-        await callback.message.answer(
-            caption, 
-            reply_markup=get_buy_kb(code),
-            parse_mode="HTML"
-        )
+    except:
+        await callback.message.edit_text(caption, reply_markup=get_item_kb(code, lang), parse_mode="HTML")
     
+    await callback.answer()
+
+@dp.callback_query(F.data == "back_catalog")
+async def back_catalog(callback: CallbackQuery):
+    lang = get_ul(callback.from_user.id)
+    await callback.message.delete()
+    await callback.message.answer(texts[lang]["catalog_title"], reply_markup=get_catalog_kb(lang))
     await callback.answer()
 
 # BUY
 @dp.callback_query(F.data.startswith("buy_"))
 async def buy_item(callback: CallbackQuery, state: FSMContext):
-    code = callback.data.split("_")[1]
+    code = callback.data.replace("buy_", "")
     lang = get_ul(callback.from_user.id)
+    item = PRODUCTS[code]
     
-    await state.update_data(item=code, price=PRODUCTS[code]['price'])
+    await state.update_data(
+        item_code=code, 
+        item_name=item[f"name_{lang}"],
+        price=item['price']
+    )
     await state.set_state(OrderState.waiting_data)
     
-    await callback.message.answer(
-        texts[lang]["enter_data"],
-        parse_mode="HTML"
-    )
+    await callback.message.delete()
+    await callback.message.answer(texts[lang]["enter_data"], parse_mode="HTML")
     await callback.answer()
 
 @dp.message(OrderState.waiting_data)
@@ -315,10 +328,20 @@ async def process_data(message: types.Message, state: FSMContext):
     data = await state.get_data()
     lang = get_ul(message.from_user.id)
     
-    await state.update_data(info=message.text)
+    # Зберігаємо у БД
+    order_id = await save_order(
+        message.from_user.id,
+        data['item_code'],
+        data['item_name'],
+        message.text,
+        data['price']
+    )
+    
+    await state.update_data(info=message.text, order_id=order_id)
     await state.set_state(OrderState.waiting_receipt)
     
     msg = texts[lang]["wait_payment"].format(
+        order_id=order_id,
         price=data['price'],
         card=CARD_NUMBER
     )
@@ -331,68 +354,43 @@ async def get_receipt(message: types.Message, state: FSMContext):
     lang = get_ul(message.from_user.id)
     user = message.from_user
     
-    # Зберігаємо у БД
-    try:
-        order_id = await save_order(user.id, data['item'], data['info'], data['price'])
-    except Exception as e:
-        logging.error(f"DB save error: {e}")
-        order_id = int(datetime.now().timestamp())
-    
-    # Надсилаємо адміну
+    # Відправка адміну
     if ADMIN_ID:
         try:
             txt = (
-                f"🚨 <b>НОВЕ ЗАМОВЛЕННЯ #{order_id}</b>\n\n"
-                f"👤 @{user.username or 'без_username'} (ID: {user.id})\n"
-                f"📦 {PRODUCTS[data['item']]['name']}\n"
+                f"🚨 <b>ЗАМОВЛЕННЯ #{data['order_id']}</b>\n\n"
+                f"👤 @{user.username or user.first_name} (ID: {user.id})\n"
+                f"📦 {data['item_name']}\n"
                 f"💰 {data['price']} грн\n\n"
-                f"📝 <b>Дані клієнта:</b>\n{data['info']}\n\n"
-                f"⏰ {datetime.now().strftime('%d.%m.%Y %H:%M')}"
+                f"📝 {data['info']}\n\n"
+                f"⏰ {datetime.now().strftime('%d.%m %H:%M')}"
             )
-            await bot.send_message(
-                ADMIN_ID, 
-                txt, 
-                reply_markup=get_admin_kb(user.id, order_id),
-                parse_mode="HTML"
-            )
+            await bot.send_message(ADMIN_ID, txt, reply_markup=get_order_kb(data['order_id'], user.id), parse_mode="HTML")
             await message.copy_to(ADMIN_ID)
         except Exception as e:
-            logging.error(f"Admin notify error: {e}")
+            logging.error(f"Admin error: {e}")
     
-    await message.answer(
-        texts[lang]["order_done"], 
-        reply_markup=get_menu_kb(lang)
-    )
+    await message.answer(texts[lang]["order_done"], reply_markup=get_menu_kb(lang))
     await state.clear()
 
 @dp.message(F.photo)
-async def unexpected_receipt(message: types.Message):
+async def unexpected_photo(message: types.Message):
     lang = get_ul(message.from_user.id)
-    await message.answer(
-        texts[lang]["session_lost"], 
-        reply_markup=get_menu_kb(lang),
-        parse_mode="HTML"
-    )
+    await message.answer(texts[lang]["session_lost"])
 
 # MANAGER
 @dp.message(F.text.contains("Менеджер"))
 async def contact_manager(message: types.Message):
     lang = get_ul(message.from_user.id)
-    await message.answer(
-        texts[lang]["manager_contact"].format(link=MANAGER_LINK),
-        parse_mode="HTML"
-    )
+    await message.answer(texts[lang]["manager_contact"].format(link=MANAGER_LINK), parse_mode="HTML")
 
 # AI
-@dp.message(F.text.contains("ШІ-асистент") | F.text.contains("ИИ-ассистент"))
+@dp.message(F.text.contains("асистент") | F.text.contains("ассистент"))
 async def support(message: types.Message, state: FSMContext):
     lang = get_ul(message.from_user.id)
     
     if not AI_ENABLED:
-        await message.answer(
-            texts[lang]["no_ai"].format(link=MANAGER_LINK),
-            parse_mode="HTML"
-        )
+        await message.answer(texts[lang]["no_ai"].format(link=MANAGER_LINK))
         return
     
     await state.set_state(SupportState.chat)
@@ -400,91 +398,100 @@ async def support(message: types.Message, state: FSMContext):
 
 @dp.message(SupportState.chat)
 async def ai_chat(message: types.Message, state: FSMContext):
-    # Вихід
-    if any(word in message.text.lower() for word in ["каталог", "меню", "menu", "назад", "вихід", "выход"]):
+    if "меню" in message.text.lower() or "menu" in message.text.lower():
         await state.clear()
         lang = get_ul(message.from_user.id)
-        await message.answer(
-            texts[lang]["menu"], 
-            reply_markup=get_menu_kb(lang)
-        )
+        await message.answer(texts[lang]["menu"], reply_markup=get_menu_kb(lang))
         return
     
-    if not AI_ENABLED:
-        lang = get_ul(message.from_user.id)
-        await message.answer(texts[lang]["no_ai"].format(link=MANAGER_LINK))
-        return
-    
-    wait = await message.answer("⏳ Думаю...")
+    wait = await message.answer("⏳...")
     
     try:
         response = client.models.generate_content(
             model='gemini-2.0-flash-exp',
-            contents=f"{AI_PROMPT}\n\nПитання: {message.text}"
+            contents=f"{AI_PROMPT}\n\n{message.text}"
         )
-        
-        answer_text = response.text if hasattr(response, 'text') else "Вибачте, не зміг обробити запит"
-        
-        await bot.edit_message_text(
-            answer_text, 
-            message.chat.id, 
-            wait.message_id
-        )
-    except Exception as e:
-        logging.error(f"AI error: {e}")
-        await bot.edit_message_text(
-            f"⚠️ Помилка ШІ.\n\n👨‍💼 Зверніться до менеджера:\n{MANAGER_LINK}",
-            message.chat.id, 
-            wait.message_id
-        )
+        await bot.edit_message_text(response.text, message.chat.id, wait.message_id)
+    except:
+        await bot.edit_message_text(f"⚠️ Помилка. {MANAGER_LINK}", message.chat.id, wait.message_id)
 
-# ADMIN CALLBACKS
-@dp.callback_query(F.data.startswith("ok_"))
-async def admin_approve(callback: CallbackQuery):
-    parts = callback.data.split("_")
-    user_id = int(parts[1])
+# ADMIN PANEL
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        await message.answer("⛔️ Доступ заборонено")
+        return
     
-    await callback.message.edit_text(
-        callback.message.text + "\n\n✅ <b>ПІДТВЕРДЖЕНО</b>",
-        reply_markup=None,
-        parse_mode="HTML"
-    )
+    lang = get_ul(message.from_user.id)
+    await message.answer(texts[lang]["admin_panel"], reply_markup=get_admin_kb(), parse_mode="HTML")
+
+@dp.callback_query(F.data == "admin_stats")
+async def admin_stats(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔️")
+        return
+    
+    lang = get_ul(callback.from_user.id)
+    users, orders, completed = await get_stats()
+    
+    msg = texts[lang]["stats"].format(users=users, orders=orders, completed=completed)
+    await callback.message.edit_text(msg, reply_markup=get_admin_kb(), parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data == "admin_orders")
+async def admin_orders(callback: CallbackQuery):
+    if callback.from_user.id != ADMIN_ID:
+        await callback.answer("⛔️")
+        return
+    
+    orders = await get_pending_orders()
+    
+    if not orders:
+        await callback.answer("Немає замовлень")
+        return
+    
+    msg = "📦 <b>АКТИВНІ ЗАМОВЛЕННЯ:</b>\n\n"
+    for order in orders:
+        msg += f"#{order[0]} | {order[2]} | {order[3]}грн\n{order[4]}\n\n"
+    
+    await callback.message.edit_text(msg, reply_markup=get_admin_kb(), parse_mode="HTML")
+    await callback.answer()
+
+@dp.callback_query(F.data.startswith("ok_"))
+async def approve_order(callback: CallbackQuery):
+    parts = callback.data.split("_")
+    order_id, user_id = int(parts[1]), int(parts[2])
+    
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE orders SET status='completed' WHERE id=?", (order_id,))
+        await db.commit()
+    
+    await callback.message.edit_text(callback.message.text + "\n\n✅ ПІДТВЕРДЖЕНО", parse_mode="HTML")
     
     try:
-        await bot.send_message(
-            user_id,
-            "✅ Ваше замовлення підтверджено!\n\n📦 Менеджер надішле номер ТТН протягом години."
-        )
+        await bot.send_message(user_id, "✅ Замовлення підтверджено! Очікуйте ТТН.")
     except:
         pass
     
-    await callback.answer("✅ Підтверджено")
+    await callback.answer("✅")
 
 @dp.callback_query(F.data.startswith("no_"))
-async def admin_reject(callback: CallbackQuery):
+async def reject_order(callback: CallbackQuery):
     parts = callback.data.split("_")
-    user_id = int(parts[1])
+    user_id = int(parts[2])
     
-    await callback.message.edit_text(
-        callback.message.text + "\n\n❌ <b>ВІДХИЛЕНО</b>",
-        reply_markup=None,
-        parse_mode="HTML"
-    )
+    await callback.message.edit_text(callback.message.text + "\n\n❌ ВІДХИЛЕНО", parse_mode="HTML")
     
     try:
-        await bot.send_message(
-            user_id,
-            f"❌ Виникла проблема з оплатою.\n\n👨‍💼 Зверніться до менеджера:\n{MANAGER_LINK}"
-        )
+        await bot.send_message(user_id, f"❌ Проблема з оплатою. {MANAGER_LINK}")
     except:
         pass
     
-    await callback.answer("❌ Відхилено")
+    await callback.answer("❌")
 
-# ERROR HANDLER
 @dp.errors()
 async def error_handler(event, exception):
-    logging.error(f"Update error: {exception}", exc_info=True)
+    logging.error(f"Error: {exception}", exc_info=True)
     return True
 
 async def main():
@@ -492,24 +499,21 @@ async def main():
     
     print("🤖 Liberty Style Bot")
     print("=" * 50)
-    print(f"✅ Token: {'Встановлено' if TOKEN else '❌ НЕМАЄ'}")
-    print(f"✅ Admin ID: {ADMIN_ID if ADMIN_ID else '❌ НЕ ВКАЗАНО'}")
-    print(f"✅ AI: {'Активовано' if AI_ENABLED else '⚠️ Вимкнено'}")
+    print(f"Token: {'✅' if TOKEN else '❌'}")
+    print(f"Admin: {ADMIN_ID if ADMIN_ID else '❌'}")
+    print(f"AI: {'✅' if AI_ENABLED else '⚠️'}")
     print("=" * 50)
     
     if ADMIN_ID:
         try:
             await bot.send_message(ADMIN_ID, "✅ БОТ ЗАПУЩЕНО!")
-        except Exception as e:
-            logging.error(f"Cannot notify admin: {e}")
+        except:
+            pass
     
-    logging.info("🚀 Bot started and polling...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("Bot stopped by user")
-    except Exception as e:
-        logging.error(f"Fatal error: {e}", exc_info=True)
+        print("Stopped")
