@@ -18,8 +18,8 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 load_dotenv()
 
 # ==================== КОНФІГУРАЦІЯ З .env ====================
-TOKEN = os.getenv("TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+TOKEN = os.getenv("8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY")
+ADMIN_ID = int(os.getenv("843027482"))
 DB_NAME = os.getenv("DB_NAME", "liberty_style_pro.db")
 NP_API_KEY = os.getenv("NOVA_POSHTA_API_KEY")
 PROVIDER_TOKEN = os.getenv("PROVIDER_TOKEN")
