@@ -12,7 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardBuilder, CallbackQuery
 
-TOKEN = "ТВОЙ_ТОКЕН"
+TOKEN = "8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY"
 ADMIN_ID = 843027482
 DB_NAME = "shop.db"
 
