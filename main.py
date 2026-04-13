@@ -21,13 +21,18 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
-# ==================== НАСТРОЙКИ (ВШИТЫ) ====================
+# ==================== НАСТРОЙКИ ====================
 TOKEN = "8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY"
 ADMIN_ID = 843027482
 PROVIDER_TOKEN = ""                 # для LiqPay (если нужна оплата)
 REF_BONUS = 50
 MANAGER_LINK = "https://t.me/polinakondratii"
 DB_NAME = "liberty_style.db"
+
+# Реквизиты для ручной оплаты
+CARD_NUMBER = "4441 1144 3259 7946"
+CARD_BANK = "Монобанк"
+CARD_HOLDER = "ФОП Кондратюк П.О."
 
 logging.basicConfig(
     level=logging.INFO,
@@ -48,6 +53,7 @@ class OrderState(StatesGroup):
     waiting_phone = State()
     waiting_promo = State()
     waiting_payment = State()
+    waiting_screenshot = State()
 
 class AddProductState(StatesGroup):
     waiting_code = State()
@@ -55,6 +61,9 @@ class AddProductState(StatesGroup):
     waiting_desc_ua = State()
     waiting_price = State()
     waiting_photo = State()
+
+class AddTTNState(StatesGroup):
+    waiting_ttn = State()
 
 # ==================== БАЗА ДАННЫХ ====================
 async def init_db():
@@ -94,7 +103,8 @@ async def init_db():
                 info TEXT,
                 ttn TEXT,
                 status TEXT DEFAULT '⏳ Очікує',
-                created_at TEXT
+                created_at TEXT,
+                screenshot TEXT
             )
         """)
         await db.execute("""
@@ -105,6 +115,12 @@ async def init_db():
                 used_count INTEGER DEFAULT 0
             )
         """)
+
+        # Добавляем колонку screenshot, если её нет (для существующих баз)
+        try:
+            await db.execute("ALTER TABLE orders ADD COLUMN screenshot TEXT")
+        except aiosqlite.OperationalError:
+            pass
 
         # Дефолтный товар
         await db.execute(
@@ -462,10 +478,12 @@ async def show_order_summary(message: Message, state: FSMContext):
     await state.set_state(OrderState.waiting_payment)
     await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
+# ==================== ОПЛАТА ====================
 @dp.callback_query(F.data == "pay_order", OrderState.waiting_payment)
 async def pay_order(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     final_payment = data["final_payment"]
+
     if PROVIDER_TOKEN:
         prices = [LabeledPrice(label="Замовлення Liberty Style", amount=final_payment * 100)]
         await bot.send_invoice(
@@ -481,7 +499,30 @@ async def pay_order(call: CallbackQuery, state: FSMContext):
         await call.message.edit_reply_markup()
         await call.answer("Виставлено рахунок на оплату.")
     else:
-        await call.answer("Оплата тимчасово недоступна. Зв'яжіться з менеджером.", show_alert=True)
+        # Ручная оплата: показываем реквизиты и просим скриншот
+        text = (
+            f"💳 <b>Реквізити для оплати:</b>\n"
+            f"🏦 Банк: {CARD_BANK}\n"
+            f"💳 Номер картки: <code>{CARD_NUMBER}</code>\n"
+            f"👤 Одержувач: {CARD_HOLDER}\n"
+            f"💰 Сума: <b>{final_payment} грн</b>\n\n"
+            f"Після оплати надішліть скріншот квитанції сюди."
+        )
+        await state.set_state(OrderState.waiting_screenshot)
+        await call.message.answer(text, parse_mode="HTML", reply_markup=cancel_keyboard())
+        await call.answer()
+
+@dp.message(OrderState.waiting_screenshot, F.photo)
+async def process_screenshot(message: Message, state: FSMContext):
+    photo = message.photo[-1].file_id
+    await state.update_data(screenshot=photo)
+    await finalize_order(message.from_user.id, state, payment_success=False, screenshot=photo)
+    await message.answer("✅ Дякуємо! Ваше замовлення прийнято і очікує перевірки оплати. Ми повідомимо вас про підтвердження.")
+    await state.clear()
+
+@dp.message(OrderState.waiting_screenshot)
+async def process_screenshot_invalid(message: Message):
+    await message.answer("❌ Будь ласка, надішліть скріншот (фото).")
 
 @dp.pre_checkout_query()
 async def process_pre_checkout(pre_checkout: PreCheckoutQuery):
@@ -498,7 +539,7 @@ async def confirm_free_order(call: CallbackQuery, state: FSMContext):
     await call.message.edit_text("✅ Замовлення підтверджено! Очікуйте на відправку.")
     await call.answer()
 
-async def finalize_order(user_id: int, state: FSMContext, payment_success: bool):
+async def finalize_order(user_id: int, state: FSMContext, payment_success: bool, screenshot: str = None):
     data = await state.get_data()
     items = await get_cart_items(user_id)
     if not items:
@@ -506,21 +547,29 @@ async def finalize_order(user_id: int, state: FSMContext, payment_success: bool)
     items_text = "; ".join([f"{name} x{qty}" for _, _, name, _, qty in items])
     info = (f"ПІБ: {data['name']}\nМісто: {data.get('city_search')}\n"
             f"Відділення: {data['warehouse_desc']}\nТелефон: {data['phone']}")
+
+    status = "⏳ Очікує перевірки оплати" if screenshot else ("⏳ Очікує підтвердження" if payment_success else "⏳ Очікує оплату")
+
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute(
-            "INSERT INTO orders (user_id, items, total_price, info, status, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-            (user_id, items_text, data['total'], info,
-             "⏳ Очікує підтвердження" if payment_success else "⏳ Очікує оплату",
-             datetime.now().isoformat())
+            """INSERT INTO orders (user_id, items, total_price, info, status, created_at, screenshot)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (user_id, items_text, data['total'], info, status, datetime.now().isoformat(), screenshot)
         )
         if data.get("balance_used", 0):
             await update_balance(user_id, -data["balance_used"])
         if promo := data.get("promo_code"):
             await db.execute("UPDATE promocodes SET used_count = used_count + 1 WHERE code = ?", (promo,))
         await db.commit()
+
     await clear_cart(user_id)
-    await state.clear()
-    await bot.send_message(ADMIN_ID, f"🆕 Нове замовлення!\nКористувач: {user_id}\nСума: {data['total']} грн")
+
+    # Уведомление админу
+    admin_text = f"🆕 Нове замовлення!\nКористувач: {user_id}\nСума: {data['total']} грн"
+    if screenshot:
+        await bot.send_photo(ADMIN_ID, screenshot, caption=admin_text)
+    else:
+        await bot.send_message(ADMIN_ID, admin_text)
 
 # ==================== АДМИН-ПАНЕЛЬ ====================
 @dp.callback_query(F.data == "admin_add_product")
@@ -592,11 +641,33 @@ async def admin_orders(call: CallbackQuery):
         orders = await cursor.fetchall()
     if not orders:
         return await call.message.answer("Замовлень немає.")
-    text = "📋 Останні замовлення:\n\n"
     for oid, uid, total, status in orders:
-        text += f"#{oid} | user {uid} | {total} грн | {status}\n"
-    await call.message.answer(text)
+        text = f"📦 Замовлення #{oid}\n👤 Користувач: {uid}\n💰 Сума: {total} грн\n🚚 Статус: {status}"
+        kb = InlineKeyboardBuilder()
+        kb.button(text="🔍 Детальніше", callback_data=f"order_{oid}")
+        if status != "✅ Підтверджено" and status != "🚚 Відправлено":
+            kb.button(text="✅ Підтвердити", callback_data=f"confirm_order_{oid}")
+        kb.adjust(1)
+        await call.message.answer(text, reply_markup=kb.as_markup())
     await call.answer()
+
+@dp.callback_query(F.data.startswith("confirm_order_"))
+async def admin_confirm_order(call: CallbackQuery):
+    if call.from_user.id != ADMIN_ID:
+        return await call.answer("⛔ Немає доступу.", show_alert=True)
+    oid = int(call.data.split("_")[2])
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE orders SET status = '✅ Підтверджено' WHERE id = ?", (oid,))
+        await db.commit()
+        cursor = await db.execute("SELECT user_id FROM orders WHERE id = ?", (oid,))
+        row = await cursor.fetchone()
+        if row:
+            try:
+                await bot.send_message(row[0], f"✅ Ваше замовлення #{oid} підтверджено! Очікуйте на відправку.")
+            except:
+                pass
+    await call.answer("✅ Замовлення підтверджено!")
+    await call.message.edit_reply_markup()
 
 @dp.callback_query(F.data == "admin_stats")
 async def admin_stats(call: CallbackQuery):
@@ -616,17 +687,68 @@ async def order_detail(call: CallbackQuery):
     oid = int(call.data.split("_")[1])
     async with aiosqlite.connect(DB_NAME) as db:
         cursor = await db.execute(
-            "SELECT items, total_price, info, ttn, status, created_at FROM orders WHERE id = ?", (oid,))
+            "SELECT items, total_price, info, ttn, status, created_at, screenshot FROM orders WHERE id = ?", (oid,))
         order = await cursor.fetchone()
     if not order:
         return await call.answer("Не знайдено.")
-    items, total, info, ttn, status, created = order
-    text = f"📦 Замовлення #{oid}\n📅 {created}\n🛒 {items}\n💰 {total} грн\n🚚 {status}\n"
+    items, total, info, ttn, status, created, screenshot = order
+    text = (f"📦 <b>Замовлення #{oid}</b>\n📅 {created}\n🛒 {items}\n💰 {total} грн\n🚚 Статус: {status}\n")
     if ttn:
-        text += f"📮 ТТН: {ttn}\n"
+        text += f"📮 ТТН: <code>{ttn}</code>\n"
     text += f"\n📋 {info}"
-    await call.message.answer(text)
+
+    kb = InlineKeyboardBuilder()
+    if status == "⏳ Очікує перевірки оплати" and screenshot:
+        kb.button(text="✅ Підтвердити оплату", callback_data=f"approve_payment_{oid}")
+    if not ttn:
+        kb.button(text="📮 Додати ТТН", callback_data=f"add_ttn_{oid}")
+    kb.adjust(1)
+
+    if screenshot:
+        await call.message.answer_photo(screenshot, caption=text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    else:
+        await call.message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await call.answer()
+
+@dp.callback_query(F.data.startswith("approve_payment_"))
+async def approve_payment(call: CallbackQuery):
+    if call.from_user.id != ADMIN_ID:
+        return await call.answer("⛔ Немає доступу.")
+    oid = int(call.data.split("_")[2])
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE orders SET status = '✅ Оплачено, очікує відправки' WHERE id = ?", (oid,))
+        await db.commit()
+        cursor = await db.execute("SELECT user_id FROM orders WHERE id = ?", (oid,))
+        row = await cursor.fetchone()
+        if row:
+            await bot.send_message(row[0], f"✅ Оплату за замовлення #{oid} підтверджено! Очікуйте на відправку.")
+    await call.answer("✅ Оплату підтверджено!")
+    await call.message.edit_reply_markup()
+
+@dp.callback_query(F.data.startswith("add_ttn_"))
+async def add_ttn_start(call: CallbackQuery, state: FSMContext):
+    if call.from_user.id != ADMIN_ID:
+        return await call.answer("⛔ Немає доступу.")
+    oid = int(call.data.split("_")[2])
+    await state.update_data(order_id=oid)
+    await state.set_state(AddTTNState.waiting_ttn)
+    await call.message.answer("📮 Введіть номер ТТН:")
+    await call.answer()
+
+@dp.message(AddTTNState.waiting_ttn)
+async def add_ttn_finish(message: Message, state: FSMContext):
+    ttn = message.text.strip()
+    data = await state.get_data()
+    oid = data['order_id']
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE orders SET ttn = ?, status = '🚚 Відправлено' WHERE id = ?", (ttn, oid))
+        await db.commit()
+        cursor = await db.execute("SELECT user_id FROM orders WHERE id = ?", (oid,))
+        row = await cursor.fetchone()
+        if row:
+            await bot.send_message(row[0], f"🚚 Ваше замовлення #{oid} відправлено!\n📮 ТТН: <code>{ttn}</code>", parse_mode="HTML")
+    await state.clear()
+    await message.answer("✅ ТТН додано, статус оновлено.")
 
 # ==================== ЗАПУСК ====================
 async def main():
