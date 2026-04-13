@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 
 import aiohttp
 import aiosqlite
@@ -10,7 +10,10 @@ from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.sqlite import SQLiteStorage
+from aiogram.fsm.storage.memory import MemoryStorage  # Временно используем MemoryStorage
+# Если установить `pip install aiogram[fast]`, можно заменить на:
+# from aiogram.fsm.storage.sqlite import SQLiteStorage
+# storage = SQLiteStorage("fsm_storage.db")
 from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
@@ -24,7 +27,7 @@ from aiogram.types import (
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from dotenv import load_dotenv
 
-# Загрузка переменных окружения
+# Загружаем переменные окружения из .env
 load_dotenv()
 
 # ==================== НАСТРОЙКИ ====================
@@ -49,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 # Инициализация бота и диспетчера
 bot = Bot(token=TOKEN)
-storage = SQLiteStorage("fsm_storage.db")  # сохраняет состояния между перезапусками
+storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
 # ==================== СОСТОЯНИЯ FSM ====================
@@ -123,7 +126,7 @@ async def init_db():
             )
         """)
 
-        # Добавляем дефолтный товар, если база пустая
+        # Дефолтный товар (добавится, если таблица пуста)
         await db.execute(
             "INSERT OR IGNORE INTO products VALUES (?, ?, ?, ?, ?)",
             (
@@ -413,7 +416,6 @@ async def add_to_cart(call: CallbackQuery):
         await db.commit()
 
     await call.answer("✅ Додано в кошик!")
-    # Показываем мини-уведомление без удаления сообщения
 
 @dp.callback_query(F.data.startswith("fast_"))
 async def fast_order(call: CallbackQuery, state: FSMContext):
@@ -440,7 +442,6 @@ async def change_quantity(call: CallbackQuery):
         if action == "inc":
             await db.execute("UPDATE cart SET quantity = quantity + 1 WHERE id = ?", (cart_id,))
         elif action == "dec":
-            # Если количество станет 0 – удаляем
             cursor = await db.execute("SELECT quantity FROM cart WHERE id = ?", (cart_id,))
             row = await cursor.fetchone()
             if row and row[0] > 1:
@@ -450,9 +451,11 @@ async def change_quantity(call: CallbackQuery):
         await db.commit()
 
     await call.answer("✅ Оновлено")
-    # Обновляем сообщение с корзиной
     await show_cart(call.message)
-    await call.message.delete_reply_markup()  # удаляем старую клавиатуру, т.к. сообщение будет новое
+    try:
+        await call.message.delete()
+    except:
+        pass
 
 @dp.callback_query(F.data.startswith("remove_"))
 async def remove_item(call: CallbackQuery):
@@ -463,7 +466,10 @@ async def remove_item(call: CallbackQuery):
 
     await call.answer("🗑️ Видалено")
     await show_cart(call.message)
-    await call.message.delete_reply_markup()
+    try:
+        await call.message.delete()
+    except:
+        pass
 
 @dp.callback_query(F.data == "clear_cart")
 async def clear_cart_cb(call: CallbackQuery):
@@ -474,7 +480,6 @@ async def clear_cart_cb(call: CallbackQuery):
 
 @dp.callback_query(F.data == "checkout")
 async def start_checkout(call: CallbackQuery, state: FSMContext):
-    # Проверяем, не пуст ли кошик
     items = await get_cart_items(call.from_user.id)
     if not items:
         await call.answer("Кошик порожній!", show_alert=True)
@@ -518,7 +523,7 @@ async def process_city(message: Message, state: FSMContext):
     await state.update_data(city_search=query)
 
     kb = InlineKeyboardBuilder()
-    for ref, name in cities[:5]:  # Показываем первые 5 вариантов
+    for ref, name in cities[:5]:
         kb.button(text=name, callback_data=f"city_{ref}")
     kb.button(text="❌ Скасувати", callback_data="cancel_order")
     kb.adjust(1)
@@ -538,7 +543,7 @@ async def choose_city(call: CallbackQuery, state: FSMContext):
     await state.set_state(OrderState.waiting_warehouse)
 
     kb = InlineKeyboardBuilder()
-    for i, (ref, desc) in enumerate(warehouses[:10]):  # до 10 отделений
+    for i, (ref, desc) in enumerate(warehouses[:10]):
         kb.button(text=desc, callback_data=f"wh_{i}")
     kb.button(text="❌ Скасувати", callback_data="cancel_order")
     kb.adjust(1)
@@ -568,7 +573,6 @@ async def choose_warehouse(call: CallbackQuery, state: FSMContext):
 @dp.message(OrderState.waiting_phone)
 async def process_phone(message: Message, state: FSMContext):
     phone = message.text.strip()
-    # Простая валидация
     if not phone.startswith("+380") or not phone[1:].isdigit() or len(phone) != 13:
         return await message.answer("❌ Невірний формат. Введіть номер у форматі +380XXXXXXXXX.")
 
@@ -616,12 +620,11 @@ async def show_order_summary(message: Message, state: FSMContext):
     data = await state.get_data()
     user_id = message.from_user.id
     items = await get_cart_items(user_id)
-    subtotal = sum(item[3] * item[4] for item in items)  # price * quantity
+    subtotal = sum(item[3] * item[4] for item in items)
     discount_percent = data.get("promo_discount", 0)
     discount_amount = subtotal * discount_percent // 100
     total = subtotal - discount_amount
 
-    # Используем баланс, если есть
     balance = await get_user_balance(user_id)
     if balance > 0:
         if balance >= total:
@@ -674,8 +677,7 @@ async def pay_order(call: CallbackQuery, state: FSMContext):
     final_payment = data["final_payment"]
 
     if PROVIDER_TOKEN:
-        # Реальная оплата через LiqPay
-        prices = [LabeledPrice(label="Замовлення Liberty Style", amount=final_payment * 100)]  # в копейках
+        prices = [LabeledPrice(label="Замовлення Liberty Style", amount=final_payment * 100)]
         await bot.send_invoice(
             chat_id=call.from_user.id,
             title="Оплата замовлення",
@@ -686,10 +688,9 @@ async def pay_order(call: CallbackQuery, state: FSMContext):
             prices=prices,
             start_parameter="liberty_order",
         )
-        await call.message.edit_reply_markup()  # убираем кнопки
+        await call.message.edit_reply_markup()
         await call.answer("Виставлено рахунок на оплату.")
     else:
-        # Заглушка
         await call.answer("Оплата тимчасово недоступна. Зв'яжіться з менеджером.", show_alert=True)
 
 @dp.pre_checkout_query()
@@ -713,11 +714,9 @@ async def finalize_order(user_id: int, state: FSMContext, payment_success: bool)
     if not items:
         return
 
-    # Формируем текстовое описание товаров
     items_text = "; ".join([f"{name} x{qty}" for _, _, name, _, qty in items])
     total_price = data["total"]
 
-    # Информация о доставке
     delivery_info = (
         f"ПІБ: {data['name']}\n"
         f"Місто: {data.get('city_search')}\n"
@@ -726,7 +725,6 @@ async def finalize_order(user_id: int, state: FSMContext, payment_success: bool)
     )
 
     async with aiosqlite.connect(DB_NAME) as db:
-        # Создаём заказ
         await db.execute(
             """INSERT INTO orders (user_id, items, total_price, info, status, created_at)
                VALUES (?, ?, ?, ?, ?, ?)""",
@@ -739,21 +737,17 @@ async def finalize_order(user_id: int, state: FSMContext, payment_success: bool)
                 datetime.now().isoformat()
             )
         )
-        # Списываем использованные бонусы
         if data.get("balance_used", 0) > 0:
             await update_balance(user_id, -data["balance_used"])
 
-        # Если был промокод – увеличиваем счётчик использований
         if promo := data.get("promo_code"):
             await db.execute("UPDATE promocodes SET used_count = used_count + 1 WHERE code = ?", (promo,))
 
         await db.commit()
 
-    # Очищаем корзину
     await clear_cart(user_id)
     await state.clear()
 
-    # Уведомление админу
     await bot.send_message(
         ADMIN_ID,
         f"🆕 Нове замовлення!\nКористувач: {user_id}\nСума: {total_price} грн"
@@ -806,9 +800,11 @@ async def process_price(message: Message, state: FSMContext):
 
 @dp.message(AddProductState.waiting_photo)
 async def process_photo(message: Message, state: FSMContext):
-    photo = message.text.strip() if message.text else None
+    photo = None
     if message.photo:
-        photo = message.photo[-1].file_id  # используем file_id как ссылку
+        photo = message.photo[-1].file_id
+    elif message.text:
+        photo = message.text.strip()
     if not photo:
         return await message.answer("❌ Потрібно фото або посилання.")
     data = await state.get_data()
@@ -849,7 +845,7 @@ async def admin_stats(call: CallbackQuery):
     await call.message.answer(text)
     await call.answer()
 
-# ==================== ОБРАБОТЧИК "ДЕТАЛЬНІШЕ" ДЛЯ ЗАКАЗА ====================
+# ==================== ДЕТАЛЬНІШЕ ПРО ЗАМОВЛЕННЯ ====================
 @dp.callback_query(F.data.startswith("order_"))
 async def order_detail(call: CallbackQuery):
     order_id = int(call.data.split("_")[1])
