@@ -28,8 +28,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ==================== НАСТРОЙКИ ====================
-TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+TOKEN = os.getenv("8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY")
+ADMIN_ID = int(os.getenv("843027482", 0))
 NP_API_KEY = os.getenv("NP_API_KEY", "")
 PROVIDER_TOKEN = os.getenv("PROVIDER_TOKEN", "")
 REF_BONUS = int(os.getenv("REF_BONUS", 50))
