@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import sys
-import html
 import aiosqlite
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
@@ -9,7 +8,7 @@ from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
 # --- КОНФІГУРАЦІЯ ---
@@ -32,7 +31,7 @@ PRODUCTS = {
             "Вона чудово підходить для будь-якого сезону і є універсальною річчю, яку легко комбінувати."
         ),
         "price": 500,
-        "photo": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/White_blouse.jpg/480px-White_blouse.jpg"
+        "photo": "https://i.ibb.co/VWV0f80/liberty-tshirt.jpg" # Оновлене посилання
     }
 }
 
@@ -40,14 +39,14 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 logging.basicConfig(level=logging.INFO, stream=sys.stdout)
 
-# --- БАЗА ДАНИХ (Зберігання всього) ---
+# --- БАЗА ДАНИХ ---
 async def init_db():
     async with aiosqlite.connect(DB_NAME) as db:
         await db.execute("""CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, username TEXT, lang TEXT DEFAULT 'ua', 
             balance INTEGER DEFAULT 0, referred_by INTEGER)""")
         await db.execute("""CREATE TABLE IF NOT EXISTS cart (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, item_code TEXT, added_at TIMESTAMP)""")
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, item_code TEXT, added_at TEXT)""")
         await db.execute("""CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, items TEXT, 
             total_price INTEGER, info TEXT, status TEXT DEFAULT '⏳ Очікує')""")
@@ -55,7 +54,7 @@ async def init_db():
         await db.execute("INSERT OR IGNORE INTO promocodes VALUES ('LIBERTY', 10)")
         await db.commit()
 
-# --- СТАНИ ОФОРМЛЕННЯ ---
+# --- СТАНИ ---
 class OrderState(StatesGroup):
     waiting_city = State()
     waiting_post = State()
@@ -63,89 +62,68 @@ class OrderState(StatesGroup):
     waiting_promo = State()
     waiting_receipt = State()
 
-# --- ДОПОМІЖНІ ФУНКЦІЇ ---
-async def get_lang(uid):
-    async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT lang FROM users WHERE user_id = ?", (uid,)) as c:
-            row = await c.fetchone()
-            return row[0] if row else "ua"
-
+# --- МЕНЮ ---
 def main_kb(lang):
     kb = ReplyKeyboardBuilder()
-    btns = ["🛍️ Каталог", "🛒 Кошик", "👤 Профіль", "👨‍💼 Менеджер"] if lang == "ua" else ["🛍️ Каталог", "🛒 Корзина", "👤 Профиль", "👨‍💼 Менеджер"]
+    btns = ["🛍️ Каталог", "🛒 Кошик", "👤 Профіль", "👨‍💼 Менеджер"]
     for btn in btns: kb.button(text=btn)
     kb.adjust(2)
     return kb.as_markup(resize_keyboard=True)
 
-# --- 1. НАГАДУВАННЯ ПРО КОШИК (Фонові завдання) ---
-async def abandoned_cart_reminder():
-    while True:
-        await asyncio.sleep(3600) 
-        now = datetime.now()
-        async with aiosqlite.connect(DB_NAME) as db:
-            two_hours_ago = (now - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
-            async with db.execute("SELECT DISTINCT user_id FROM cart WHERE added_at < ?", (two_hours_ago,)) as c:
-                users = await c.fetchall()
-                for user in users:
-                    try: await bot.send_message(user[0], "👋 Ви залишили товари у кошику! Не забудьте завершити замовлення. ✨")
-                    except: pass
-            await db.execute("DELETE FROM cart WHERE added_at < ?", (two_hours_ago,)) # Очищуємо старі записи
-            await db.commit()
-
-# --- ХЕНДЛЕРИ КЛІЄНТА ---
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message, command: CommandObject):
-    ref_id = int(command.args) if command.args and command.args.isdigit() else None
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT OR IGNORE INTO users (user_id, username, referred_by) VALUES (?, ?, ?)", 
-                         (message.from_user.id, message.from_user.username, ref_id))
-        await db.commit()
-    kb = InlineKeyboardBuilder().button(text="🇺🇦 UA", callback_data="setlang_ua").button(text="🇷🇺 RU", callback_data="setlang_ru")
-    await message.answer("<b>Liberty Style</b>\n\nОберіть мову / Выберите язык:", reply_markup=kb.as_markup(), parse_mode="HTML")
-
-@dp.callback_query(F.data.startswith("setlang_"))
-async def set_lang_cb(call: CallbackQuery):
-    lang = call.data.split("_")[1]
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("UPDATE users SET lang = ? WHERE user_id = ?", (lang, call.from_user.id))
-        await db.commit()
-    await call.message.answer(f"✅ Вітаємо! Оберіть пункт меню:", reply_markup=main_kb(lang))
-    await call.answer()
-
-@dp.message(F.text.contains("Каталог"))
+# --- ХЕНДЛЕР КАТАЛОГУ (ВИПРАВЛЕНИЙ) ---
+@dp.message(F.text.icontains("Каталог"))
 async def catalog(message: types.Message):
-    lang = await get_lang(message.from_user.id)
-    for k, v in PRODUCTS.items():
-        cap = f"🌟 <b>{v[lang]}</b>\n\n{v['desc']}\n\n💰 Ціна: <b>{v['price']} грн</b>"
-        kb = InlineKeyboardBuilder().button(text="🛒 Додати в кошик", callback_data=f"add_{k}")
-        await message.answer_photo(v['photo'], caption=cap, reply_markup=kb.as_markup(), parse_mode="HTML")
+    async with aiosqlite.connect(DB_NAME) as db:
+        async with db.execute("SELECT lang FROM users WHERE user_id = ?", (message.from_user.id,)) as c:
+            row = await c.fetchone()
+            lang = row[0] if row else "ua"
 
+    for k, v in PRODUCTS.items():
+        caption = f"🌟 <b>{v[lang]}</b>\n\n{v['desc']}\n\n💰 Ціна: <b>{v['price']} грн</b>"
+        kb = InlineKeyboardBuilder().button(text="🛒 Додати в кошик", callback_data=f"add_{k}")
+        
+        try:
+            await message.answer_photo(v['photo'], caption=caption, reply_markup=kb.as_markup(), parse_mode="HTML")
+        except Exception as e:
+            # Якщо фото не завантажилось, відправляємо текстом
+            logging.error(f"Photo error: {e}")
+            await message.answer(f"🖼️ [Фото товару]\n\n{caption}", reply_markup=kb.as_markup(), parse_mode="HTML")
+
+# --- КОШИК ---
 @dp.callback_query(F.data.startswith("add_"))
 async def add_to_cart(call: CallbackQuery):
     code = call.data.split("_")[1]
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("INSERT INTO cart (user_id, item_code, added_at) VALUES (?, ?, ?)", 
-                         (call.from_user.id, code, datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
+        await db.execute("INSERT INTO cart (user_id, item_code, added_at) VALUES (?, ?, ?)", (call.from_user.id, code, now))
         await db.commit()
-    await call.answer("✅ Додано!")
+    await call.answer("✅ Додано в кошик!")
 
-@dp.message(F.text.contains("Кошик") | F.text.contains("Корзина"))
+@dp.message(F.text.icontains("Кошик") | F.text.icontains("Корзина"))
 async def view_cart(message: types.Message):
-    lang = await get_lang(message.from_user.id)
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute("SELECT item_code FROM cart WHERE user_id = ?", (message.from_user.id,)) as c:
             items = await c.fetchall()
-    if not items: return await message.answer("🛒 Кошик порожній.")
+    
+    if not items: return await message.answer("🛒 Ваш кошик порожній.")
+    
     total = sum(PRODUCTS[i[0]]['price'] for i in items)
-    res = f"🛒 <b>Ваш кошик:</b>\n\n" + "\n".join([f"• {PRODUCTS[i[0]][lang]}" for i in items]) + f"\n\n💰 <b>Разом: {total} грн</b>"
-    kb = InlineKeyboardBuilder().button(text="💳 Оформити", callback_data="checkout").button(text="🗑️ Очистити", callback_data="clear").adjust(1)
+    res = "🛒 <b>Ваш кошик:</b>\n\n" + "\n".join([f"• {PRODUCTS[i[0]]['ua']}" for i in items]) + f"\n\n💰 <b>Разом: {total} грн</b>"
+    kb = InlineKeyboardBuilder().button(text="💳 Оформити", callback_data="checkout").button(text="🗑️ Очистити", callback_data="clear_cart").adjust(1)
     await message.answer(res, reply_markup=kb.as_markup(), parse_mode="HTML")
 
-# --- 2. ОФОРМЛЕННЯ (НОВА ПОШТА + ПРОМОКОД) ---
+@dp.callback_query(F.data == "clear_cart")
+async def clear_cart(call: CallbackQuery):
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("DELETE FROM cart WHERE user_id = ?", (call.from_user.id,))
+        await db.commit()
+    await call.message.edit_text("🗑️ Кошик очищено.")
+
+# --- ОФОРМЛЕННЯ ---
 @dp.callback_query(F.data == "checkout")
 async def start_checkout(call: CallbackQuery, state: FSMContext):
     await state.set_state(OrderState.waiting_city)
-    await call.message.answer("🏙️ Вкажіть ваше місто:")
+    await call.message.answer("🏙️ Введіть ваше місто:")
     await call.answer()
 
 @dp.message(OrderState.waiting_city)
@@ -178,7 +156,6 @@ async def apply_promo(event: types.Message | CallbackQuery, state: FSMContext):
                 row = await c.fetchone()
                 if row: discount = row[0]
     
-    data = await state.get_data()
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute("SELECT item_code FROM cart WHERE user_id = ?", (event.from_user.id,)) as c:
             items = await c.fetchall()
@@ -190,8 +167,8 @@ async def apply_promo(event: types.Message | CallbackQuery, state: FSMContext):
     await state.set_state(OrderState.waiting_receipt)
     
     pay_msg = f"💳 <b>До сплати: {total} грн</b>\n\nКарта: <code>{CARD_NUMBER}</code>\n\nНадішліть скріншот оплати 👇"
-    if isinstance(event, CallbackQuery): await event.message.answer(pay_msg, parse_mode="HTML")
-    else: await event.answer(pay_msg, parse_mode="HTML")
+    msg = event.message if isinstance(event, CallbackQuery) else event
+    await msg.answer(pay_msg, parse_mode="HTML")
 
 @dp.message(OrderState.waiting_receipt, F.photo)
 async def final_order(message: types.Message, state: FSMContext):
@@ -203,81 +180,76 @@ async def final_order(message: types.Message, state: FSMContext):
         oid = cur.lastrowid
         await db.execute("DELETE FROM cart WHERE user_id = ?", (message.from_user.id,))
         await db.commit()
+    
     await bot.send_message(ADMIN_ID, f"🔔 <b>ЗАМОВЛЕННЯ #{oid}</b>\n\n{info}\nСума: {data['total']} грн")
     await message.copy_to(ADMIN_ID)
     await message.answer(f"✅ Замовлення #{oid} оформлено! Чекайте підтвердження.")
     await state.clear()
 
-# --- 3. ПРОФІЛЬ ТА РЕФЕРАЛКА ---
-@dp.message(F.text.contains("Профіль") | F.text.contains("Профиль"))
+# --- СТАРТ ТА ПРОФІЛЬ ---
+@dp.message(Command("start"))
+async def cmd_start(message: types.Message, command: CommandObject):
+    ref_id = int(command.args) if command.args and command.args.isdigit() else None
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("INSERT OR IGNORE INTO users (user_id, username, referred_by) VALUES (?, ?, ?)", 
+                         (message.from_user.id, message.from_user.username, ref_id))
+        await db.commit()
+    kb = InlineKeyboardBuilder().button(text="🇺🇦 UA", callback_data="setlang_ua").button(text="🇷🇺 RU", callback_data="setlang_ru")
+    await message.answer("<b>Liberty Style</b>\n\nОберіть мову:", reply_markup=kb.as_markup(), parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("setlang_"))
+async def set_lang(call: CallbackQuery):
+    lang = call.data.split("_")[1]
+    async with aiosqlite.connect(DB_NAME) as db:
+        await db.execute("UPDATE users SET lang = ? WHERE user_id = ?", (lang, call.from_user.id))
+        await db.commit()
+    await call.message.answer("Готово! Приємних покупок.", reply_markup=main_kb(lang))
+    await call.answer()
+
+@dp.message(F.text.icontains("Профіль") | F.text.icontains("Профиль"))
 async def profile(message: types.Message):
     async with aiosqlite.connect(DB_NAME) as db:
         async with db.execute("SELECT balance FROM users WHERE user_id = ?", (message.from_user.id,)) as c:
             balance = (await c.fetchone())[0]
-        async with db.execute("SELECT id, status FROM orders WHERE user_id = ? ORDER BY id DESC LIMIT 3", (message.from_user.id,)) as c:
-            orders = await c.fetchall()
-    
     me = await bot.get_me()
     ref_link = f"https://t.me/{me.username}?start={message.from_user.id}"
-    res = f"👤 <b>Ваш профіль</b>\n\n💰 Бонуси: {balance} грн\n🔗 Рефералка (+{REF_BONUS} грн): <code>{ref_link}</code>\n\n"
-    if orders:
-        res += "<b>Останні замовлення:</b>\n" + "\n".join([f"#{o[0]} — {o[1]}" for o in orders])
-    else: res += "У вас ще немає замовлень."
-    await message.answer(res, parse_mode="HTML")
+    await message.answer(f"👤 <b>Профіль</b>\n\n💰 Баланс: {balance} грн\n🔗 Рефералка: <code>{ref_link}</code>", parse_mode="HTML")
 
-@dp.message(F.text.contains("Менеджер"))
+@dp.message(F.text.icontains("Менеджер"))
 async def support(message: types.Message):
-    await message.answer(f"👨‍💼 Ви можете зв'язатися з нами тут: {MANAGER_LINK}")
+    await message.answer(f"👨‍💼 Підтримка: {MANAGER_LINK}")
 
-# --- 4. РОЗШИРЕНА АДМІНКА ТА СТАТИСТИКА ---
+# --- ФОНОВІ ЗАВДАННЯ ---
+async def abandoned_cart_reminder():
+    while True:
+        await asyncio.sleep(3600)
+        now = datetime.now()
+        async with aiosqlite.connect(DB_NAME) as db:
+            limit = (now - timedelta(hours=2)).strftime('%Y-%m-%d %H:%M:%S')
+            async with db.execute("SELECT DISTINCT user_id FROM cart WHERE added_at < ?", (limit,)) as c:
+                users = await c.fetchall()
+                for u in users:
+                    try: await bot.send_message(u[0], "👋 У вашому кошику залишилися товари! Не забудьте замовити. ✨")
+                    except: pass
+            await db.execute("DELETE FROM cart WHERE added_at < ?", (limit,))
+            await db.commit()
+
+# --- АДМІНКА ---
 @dp.message(Command("admin"), F.from_user.id == ADMIN_ID)
 async def admin_menu(message: types.Message):
-    kb = InlineKeyboardBuilder().button(text="📊 Статистика", callback_data="adm_stats").button(text="📦 Замовлення", callback_data="adm_orders")
+    kb = InlineKeyboardBuilder().button(text="📊 Статистика", callback_data="adm_stats")
     await message.answer("🛠️ Адмін-панель:", reply_markup=kb.as_markup())
 
 @dp.callback_query(F.data == "adm_stats")
-async def admin_stats(call: CallbackQuery):
+async def adm_stats(call: CallbackQuery):
     async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT COUNT(*), SUM(total_price) FROM orders WHERE status = '✅ Доставлено'") as c:
-            row = await c.fetchone()
-        async with db.execute("SELECT COUNT(*) FROM users") as u:
-            u_count = (await u.fetchone())[0]
-    res = f"📊 <b>Статистика Liberty Style:</b>\n\n👥 Клієнтів: {u_count}\n📦 Продано: {row[0] or 0}\n💰 Прибуток: {row[1] or 0} грн"
-    await call.message.edit_text(res, reply_markup=InlineKeyboardBuilder().button(text="🔙 Назад", callback_data="adm_back").as_markup(), parse_mode="HTML")
-
-@dp.callback_query(F.data == "adm_orders")
-async def admin_orders(call: CallbackQuery):
-    async with aiosqlite.connect(DB_NAME) as db:
-        async with db.execute("SELECT id, status FROM orders WHERE status != '✅ Доставлено' LIMIT 5") as c:
-            orders = await c.fetchall()
-    kb = InlineKeyboardBuilder()
-    for o in orders: kb.button(text=f"Замовлення #{o[0]} ({o[1]})", callback_data=f"st_{o[0]}")
-    kb.adjust(1)
-    await call.message.edit_text("📦 Керування статусами:", reply_markup=kb.as_markup())
-
-@dp.callback_query(F.data.startswith("st_"))
-async def set_status(call: CallbackQuery):
-    oid = call.data.split("_")[1]
-    kb = InlineKeyboardBuilder()
-    for s in ["💳 Оплачено", "✅ Доставлено"]: kb.button(text=s, callback_data=f"upd_{oid}_{s}")
-    await call.message.edit_text(f"Змінити статус #{oid}:", reply_markup=kb.as_markup())
-
-@dp.callback_query(F.data.startswith("upd_"))
-async def update_status(call: CallbackQuery):
-    _, oid, status = call.data.split("_")
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("UPDATE orders SET status = ? WHERE id = ?", (status, oid))
-        if status == "✅ Доставлено":
-            async with db.execute("SELECT user_id FROM orders WHERE id = ?", (oid,)) as c: uid = (await c.fetchone())[0]
-            async with db.execute("SELECT referred_by FROM users WHERE user_id = ?", (uid,)) as c: rid = (await c.fetchone())[0]
-            if rid: await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (REF_BONUS, rid))
-        await db.commit()
-    await call.answer("Статус оновлено!")
-    await admin_orders(call)
+        async with db.execute("SELECT COUNT(*) FROM users") as c:
+            count = (await c.fetchone())[0]
+    await call.message.answer(f"👥 Всього користувачів: {count}")
 
 async def main():
     await init_db()
-    asyncio.create_task(abandoned_cart_reminder()) # Запуск нагадувань
+    asyncio.create_task(abandoned_cart_reminder())
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
