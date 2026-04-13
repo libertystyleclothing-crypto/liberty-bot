@@ -27,12 +27,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = os.getenv("8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY")
 if not TOKEN:
     print("❌ BOT_TOKEN не найден. Проверьте переменные окружения или файл .env.")
     sys.exit(1)
 
-ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+ADMIN_ID = int(os.getenv("843027482", 0))
 NP_API_KEY = os.getenv("NP_API_KEY", "")
 PROVIDER_TOKEN = os.getenv("PROVIDER_TOKEN", "")
 REF_BONUS = int(os.getenv("REF_BONUS", 50))
