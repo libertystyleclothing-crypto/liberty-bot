@@ -24,7 +24,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 
 # ==================== НАСТРОЙКИ ====================
-TOKEN = os.getenv("8384366822:AAFhkEEZyvxoTatRnV_1-YQN8SLKtBeCn7o")
+TOKEN = os.getenv("TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_CHAT_ID"))
 
 PROVIDER_TOKEN = ""
