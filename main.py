@@ -1,3 +1,4 @@
+import os
 import asyncio
 import logging
 from datetime import datetime
@@ -21,10 +22,12 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
+
 # ==================== НАСТРОЙКИ ====================
-TOKEN = "8528185164:AAEStuXrXQ6aSeiYRSxYXHSVLP5nZJSkqBY"
-ADMIN_ID = 843027482
-PROVIDER_TOKEN = ""                 # для LiqPay (если нужна оплата)
+TOKEN = os.getenv("8384366822:AAFhkEEZyvxoTatRnV_1-YQN8SLKtBeCn7o")
+ADMIN_ID = int(os.getenv("843027482"))
+
+PROVIDER_TOKEN = ""
 REF_BONUS = 50
 MANAGER_LINK = "https://t.me/polinakondratii"
 DB_NAME = "liberty_style.db"
