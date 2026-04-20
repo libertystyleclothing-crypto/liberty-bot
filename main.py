@@ -25,7 +25,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 # ==================== НАСТРОЙКИ ====================
 TOKEN = os.getenv("8384366822:AAFhkEEZyvxoTatRnV_1-YQN8SLKtBeCn7o")
-ADMIN_ID = int(os.getenv("843027482"))
+ADMIN_ID = int(os.getenv("ADMIN_CHAT_ID"))
 
 PROVIDER_TOKEN = ""
 REF_BONUS = 50
